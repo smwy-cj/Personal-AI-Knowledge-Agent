@@ -68,6 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation.add_argument("--provider")
     evaluation.add_argument("--limit", type=int, default=10)
     evaluation.add_argument("--minimum", action="append", default=[])
+    evaluation.add_argument("--maximum", action="append", default=[])
     research_evaluation = subcommands.add_parser("eval-research", help="Evaluate summary structure and citation labels")
     research_evaluation.add_argument("dataset")
     research_evaluation.add_argument("--minimum", action="append", default=[])
@@ -76,6 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
     memory_evaluation.add_argument("--minimum", action="append", default=[])
     summary = subcommands.add_parser("observability-summary", help="Aggregate privacy-minimized runtime events")
     summary.add_argument("--limit", type=int, default=1000)
+    summary.add_argument("--minimum", action="append", default=[])
+    summary.add_argument("--maximum", action="append", default=[])
     prune = subcommands.add_parser(
         "events-prune", help="Preview or explicitly apply observability retention"
     )
@@ -144,6 +147,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 arguments.provider,
                 arguments.limit,
                 _minimums(arguments.minimum),
+                _maximums(arguments.maximum),
             )
         elif arguments.command == "eval-research":
             result = service.evaluate_research_summaries(
@@ -154,7 +158,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 arguments.dataset, _minimums(arguments.minimum)
             )
         elif arguments.command == "observability-summary":
-            result = service.observability_summary(arguments.limit)
+            result = service.observability_summary(
+                arguments.limit,
+                _minimums(arguments.minimum),
+                _maximums(arguments.maximum),
+            )
         elif arguments.command == "events-prune":
             result = service.prune_observability_events(
                 arguments.older_than_days, arguments.apply
@@ -191,20 +199,32 @@ def _jsonable(value: Any) -> Any:
 
 
 def _minimums(values: Sequence[str]) -> dict:
+    return _thresholds(values, "minimum", bounded=True)
+
+
+def _maximums(values: Sequence[str]) -> dict:
+    return _thresholds(values, "maximum", bounded=False)
+
+
+def _thresholds(values: Sequence[str], direction: str, bounded: bool) -> dict:
     output = {}
     for value in values:
         if "=" not in value:
-            raise ValueError("quality minimums must use metric=value")
+            raise ValueError("quality %ss must use metric=value" % direction)
         name, raw = value.split("=", 1)
         name = name.strip()
         if not name or name in output:
-            raise ValueError("quality minimum metric names must be non-empty and unique")
+            raise ValueError(
+                "quality %s metric names must be non-empty and unique" % direction
+            )
         try:
             threshold = float(raw)
         except ValueError as exc:
-            raise ValueError("quality minimum values must be numbers") from exc
-        if not 0 <= threshold <= 1:
+            raise ValueError("quality %s values must be numbers" % direction) from exc
+        if bounded and not 0 <= threshold <= 1:
             raise ValueError("quality minimum values must be between 0 and 1")
+        if not bounded and not 0 <= threshold < float("inf"):
+            raise ValueError("quality maximum values must be finite and non-negative")
         output[name] = threshold
     return output
 

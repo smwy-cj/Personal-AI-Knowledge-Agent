@@ -39,6 +39,7 @@ from .rate_limiter import SQLiteProviderRateLimiter
 from .quality_evaluation import (
     MemoryGovernanceEvaluationDataset,
     ResearchSummaryEvaluationDataset,
+    apply_observability_gates,
     apply_retrieval_gates,
     evaluate_memory_governance,
     evaluate_research_summaries,
@@ -314,8 +315,15 @@ class ApplicationService:
         self.task_repository.load(task_id)
         return self.event_store.list_task_events(task_id, limit)
 
-    def observability_summary(self, limit: int = 1000) -> Dict[str, object]:
-        return self.event_store.aggregate(limit)
+    def observability_summary(
+        self,
+        limit: int = 1000,
+        minimums: Optional[Dict[str, float]] = None,
+        maximums: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, object]:
+        return apply_observability_gates(
+            self.event_store.aggregate(limit), minimums or {}, maximums or {}
+        )
 
     def prune_observability_events(
         self, retention_days: Optional[int] = None, apply: bool = False
@@ -334,6 +342,7 @@ class ApplicationService:
         provider_id: Optional[str] = None,
         limit: int = 10,
         minimums: Optional[Dict[str, float]] = None,
+        maximums: Optional[Dict[str, float]] = None,
     ) -> Dict[str, object]:
         dataset = RetrievalEvaluationDataset.load(dataset_path)
         if engine == "keyword":
@@ -345,7 +354,9 @@ class ApplicationService:
         else:
             raise ValueError("evaluation engine must be keyword or hybrid")
         report = evaluate_retrieval(dataset, search, engine, limit)
-        output = apply_retrieval_gates(report.as_dict(), minimums or {})
+        output = apply_retrieval_gates(
+            report.as_dict(), minimums or {}, maximums or {}
+        )
         record_event_safely(
             self.event_store,
             "evaluation_completed",

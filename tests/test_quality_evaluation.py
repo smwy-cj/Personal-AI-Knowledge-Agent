@@ -6,6 +6,8 @@ from pathlib import Path
 from personal_ai_agent.quality_evaluation import (
     MemoryGovernanceEvaluationDataset,
     ResearchSummaryEvaluationDataset,
+    apply_observability_gates,
+    apply_retrieval_gates,
     evaluate_memory_governance,
     evaluate_research_summaries,
 )
@@ -178,6 +180,63 @@ class QualityEvaluationTests(unittest.TestCase):
             evaluate_research_summaries(dataset, {"unknown": 1.0})
         with self.assertRaises(ValueError):
             evaluate_research_summaries(dataset, {"citation_f1": 1.1})
+
+    def test_retrieval_gates_support_quality_minimums_and_latency_maximums(self):
+        report = apply_retrieval_gates(
+            {
+                "recall_at_k": 0.8,
+                "hit_rate_at_k": 1.0,
+                "mrr_at_k": 0.7,
+                "p50_latency_ms": 20,
+                "p95_latency_ms": 120,
+            },
+            {"recall_at_k": 0.9},
+            {"p95_latency_ms": 100},
+        )
+
+        self.assertFalse(report["gate_passed"])
+        self.assertEqual(report["failed_gates"], ["recall_at_k", "p95_latency_ms"])
+        self.assertEqual(
+            report["gate_thresholds"],
+            {
+                "minimums": {"recall_at_k": 0.9},
+                "maximums": {"p95_latency_ms": 100},
+            },
+        )
+
+    def test_observability_gates_bound_success_latency_and_cost(self):
+        report = apply_observability_gates(
+            {
+                "task_success_rate": 0.75,
+                "estimated_cost_microusd": 250,
+                "estimated_cost_usd": 0.00025,
+                "step_p50_latency_ms": 20,
+                "step_p95_latency_ms": 100,
+                "model_p50_latency_ms": 40,
+                "model_p95_latency_ms": 80,
+            },
+            {"task_success_rate": 0.8},
+            {"estimated_cost_microusd": 200, "model_p95_latency_ms": 100},
+        )
+
+        self.assertFalse(report["gate_passed"])
+        self.assertEqual(
+            report["failed_gates"],
+            ["task_success_rate", "estimated_cost_microusd"],
+        )
+
+    def test_directional_gate_whitelists_and_finite_thresholds_are_enforced(self):
+        retrieval = {
+            "recall_at_k": 1.0,
+            "hit_rate_at_k": 1.0,
+            "mrr_at_k": 1.0,
+            "p50_latency_ms": 1,
+            "p95_latency_ms": 2,
+        }
+        with self.assertRaises(ValueError):
+            apply_retrieval_gates(retrieval, {}, {"recall_at_k": 1.0})
+        with self.assertRaises(ValueError):
+            apply_retrieval_gates(retrieval, {}, {"p95_latency_ms": float("inf")})
 
 
 if __name__ == "__main__":

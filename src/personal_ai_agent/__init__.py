@@ -53,6 +53,8 @@ from .rate_limiter import ProviderRateLimitExceeded, SQLiteProviderRateLimiter
 from .quality_evaluation import (
     MemoryGovernanceEvaluationDataset,
     ResearchSummaryEvaluationDataset,
+    apply_observability_gates,
+    apply_retrieval_gates,
     evaluate_memory_governance,
     evaluate_research_summaries,
 )
@@ -147,4 +149,6 @@ __all__ = [
     "evaluate_retrieval",
     "evaluate_research_summaries",
     "evaluate_memory_governance",
+    "apply_retrieval_gates",
+    "apply_observability_gates",
 ]

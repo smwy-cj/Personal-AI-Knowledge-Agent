@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -11,6 +12,25 @@ from .memory_repository import SQLiteMemoryRepository
 from .memory_workflow import govern_memory_candidate
 from .models import MemoryCandidate
 from .research_summary import validate_research_summary
+
+
+RETRIEVAL_MINIMUM_METRICS = frozenset(
+    {"recall_at_k", "hit_rate_at_k", "mrr_at_k"}
+)
+RETRIEVAL_MAXIMUM_METRICS = frozenset(
+    {"p50_latency_ms", "p95_latency_ms"}
+)
+OBSERVABILITY_MINIMUM_METRICS = frozenset({"task_success_rate"})
+OBSERVABILITY_MAXIMUM_METRICS = frozenset(
+    {
+        "estimated_cost_microusd",
+        "estimated_cost_usd",
+        "step_p50_latency_ms",
+        "step_p95_latency_ms",
+        "model_p50_latency_ms",
+        "model_p95_latency_ms",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -316,26 +336,96 @@ def evaluate_memory_governance(
 
 
 def apply_retrieval_gates(
-    report: Dict[str, object], minimums: Dict[str, float]
+    report: Dict[str, object],
+    minimums: Dict[str, float],
+    maximums: Optional[Dict[str, float]] = None,
+) -> Dict[str, object]:
+    return apply_metric_gates(
+        report,
+        minimums,
+        maximums or {},
+        RETRIEVAL_MINIMUM_METRICS,
+        RETRIEVAL_MAXIMUM_METRICS,
+    )
+
+
+def apply_observability_gates(
+    report: Dict[str, object],
+    minimums: Dict[str, float],
+    maximums: Dict[str, float],
+) -> Dict[str, object]:
+    return apply_metric_gates(
+        report,
+        minimums,
+        maximums,
+        OBSERVABILITY_MINIMUM_METRICS,
+        OBSERVABILITY_MAXIMUM_METRICS,
+    )
+
+
+def apply_metric_gates(
+    report: Dict[str, object],
+    minimums: Dict[str, float],
+    maximums: Dict[str, float],
+    allowed_minimums: frozenset,
+    allowed_maximums: frozenset,
 ) -> Dict[str, object]:
     output = dict(report)
-    metrics = {name: float(output[name]) for name in minimums}
-    failed = _failed_gates(metrics, minimums)
+    _validate_gate_names(minimums, allowed_minimums, "minimum")
+    _validate_gate_names(maximums, allowed_maximums, "maximum")
+    failed = _failed_gates(output, minimums)
+    failed.extend(_failed_maximum_gates(output, maximums))
     output["gate_passed"] = not failed
     output["failed_gates"] = failed
+    output["gate_thresholds"] = {
+        "minimums": dict(minimums),
+        "maximums": dict(maximums),
+    }
     return output
 
 
-def _failed_gates(metrics: Dict[str, float], minimums: Dict[str, float]) -> List[str]:
+def _failed_gates(metrics: Dict[str, object], minimums: Dict[str, float]) -> List[str]:
     failed = []
     for name, threshold in minimums.items():
         if name not in metrics:
             raise ValueError("unknown quality gate metric: %s" % name)
-        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not 0 <= threshold <= 1:
+        if (
+            isinstance(threshold, bool)
+            or not isinstance(threshold, (int, float))
+            or not math.isfinite(float(threshold))
+            or not 0 <= threshold <= 1
+        ):
             raise ValueError("quality gate thresholds must be between 0 and 1")
-        if metrics[name] < float(threshold):
+        if float(metrics[name]) < float(threshold):
             failed.append(name)
     return failed
+
+
+def _failed_maximum_gates(
+    metrics: Dict[str, object], maximums: Dict[str, float]
+) -> List[str]:
+    failed = []
+    for name, threshold in maximums.items():
+        if name not in metrics:
+            raise ValueError("unknown quality gate metric: %s" % name)
+        if (
+            isinstance(threshold, bool)
+            or not isinstance(threshold, (int, float))
+            or not math.isfinite(float(threshold))
+            or threshold < 0
+        ):
+            raise ValueError("quality maximum thresholds must be finite and non-negative")
+        if float(metrics[name]) > float(threshold):
+            failed.append(name)
+    return failed
+
+
+def _validate_gate_names(
+    thresholds: Dict[str, float], allowed: frozenset, direction: str
+) -> None:
+    for name in thresholds:
+        if name not in allowed:
+            raise ValueError("unsupported %s gate metric: %s" % (direction, name))
 
 
 def _load_document(path: Union[str, Path], schema: str) -> Dict[str, Any]:

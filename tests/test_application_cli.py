@@ -415,6 +415,76 @@ class ApplicationCliTests(unittest.TestCase):
         self.assertEqual((code, errors), (0, ""))
         self.assertTrue(json.loads(output)["gate_passed"])
 
+        with patch(
+            "personal_ai_agent.evaluation.time.monotonic",
+            side_effect=[10.0, 10.125],
+        ):
+            code, output, errors = self.invoke(
+                "eval-retrieval",
+                str(dataset),
+                "--maximum",
+                "p95_latency_ms=100",
+            )
+        self.assertEqual((code, errors), (3, ""))
+        report = json.loads(output)
+        self.assertEqual(report["p95_latency_ms"], 125)
+        self.assertEqual(report["failed_gates"], ["p95_latency_ms"])
+
+    def test_cli_observability_summary_applies_success_latency_and_cost_gates(self):
+        service = ApplicationService.from_file(str(self.config_path))
+        service.event_store.record(
+            "task_completed",
+            "task-complete",
+            attributes={
+                "final_status": "COMPLETED",
+                "tool_calls": 1,
+                "model_call_count": 1,
+                "token_usage": 10,
+                "retry_count": 0,
+            },
+        )
+        service.event_store.record(
+            "model_completed",
+            "task-complete",
+            attributes={
+                "provider_id": "provider",
+                "model_id": "model",
+                "task_type": "summary",
+                "prompt_version": "v1",
+                "input_tokens": 8,
+                "output_tokens": 2,
+                "duration_ms": 75,
+                "model_call_count": 1,
+                "estimated_cost_microusd": 54,
+            },
+        )
+
+        code, output, errors = self.invoke(
+            "observability-summary",
+            "--minimum",
+            "task_success_rate=1",
+            "--maximum",
+            "model_p95_latency_ms=50",
+            "--maximum",
+            "estimated_cost_microusd=53",
+        )
+
+        self.assertEqual((code, errors), (3, ""))
+        report = json.loads(output)
+        self.assertEqual(report["task_success_rate"], 1.0)
+        self.assertEqual(report["failed_gates"], [
+            "model_p95_latency_ms",
+            "estimated_cost_microusd",
+        ])
+        self.assertNotIn("task-complete", output)
+
+        code, output, errors = self.invoke(
+            "observability-summary", "--maximum", "task_success_rate=1"
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(output, "")
+        self.assertIn("unsupported maximum gate metric", errors)
+
     def test_cli_research_and_memory_quality_gates_use_distinct_exit_code(self):
         research = self.root / "research-eval.json"
         research.write_text(

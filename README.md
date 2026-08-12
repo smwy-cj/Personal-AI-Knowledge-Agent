@@ -308,6 +308,7 @@ Provider 可靠性边界：
 ```powershell
 python -m personal_ai_agent --config agent.config.json eval-retrieval evaluations/retrieval.example.json --limit 10
 python -m personal_ai_agent --config agent.config.json eval-retrieval evaluations/retrieval.example.json --engine hybrid --provider primary-embedding --limit 10
+python -m personal_ai_agent --config agent.config.json eval-retrieval evaluations/retrieval.example.json --minimum recall_at_k=0.9 --maximum p95_latency_ms=250
 ```
 
 报告输出 `Recall@K`、`Hit Rate@K`、`MRR@K`、P50/P95 查询延迟及逐 Case 的命中计数和倒数排名。报告不回显查询和检索正文；数据集本身仍包含查询，应该只提交经过审查、无敏感信息的固定评测语料。
@@ -315,7 +316,7 @@ python -m personal_ai_agent --config agent.config.json eval-retrieval evaluation
 运行聚合：
 
 ```powershell
-python -m personal_ai_agent --config agent.config.json observability-summary --limit 1000
+python -m personal_ai_agent --config agent.config.json observability-summary --limit 1000 --minimum task_success_rate=0.95 --maximum model_p95_latency_ms=30000 --maximum estimated_cost_usd=1
 python -m personal_ai_agent --config agent.config.json events-prune --older-than-days 90
 python -m personal_ai_agent --config agent.config.json events-prune --older-than-days 90 --apply
 ```
@@ -333,13 +334,15 @@ python -m personal_ai_agent --config agent.config.json eval-research evaluations
 python -m personal_ai_agent --config agent.config.json eval-memory evaluations/memory_governance.example.json --minimum decision_accuracy=1
 ```
 
-所有评测命令均支持重复的 `--minimum metric=value` 质量门禁：
+准确率和成功率使用重复的 `--minimum metric=value` 下限门禁；检索延迟及观测窗口中的步骤/模型延迟、估算成本使用重复的 `--maximum metric=value` 上限门禁。门禁输出包含实际指标、阈值和失败指标名称：
 
 - 达标返回退出码 `0`；
 - 评测正常但未达标返回 `3`，stdout 仍包含完整 JSON 报告；
 - 数据集、参数或执行错误返回 `2`，错误写入 stderr。
 
 Research 报告衡量结构有效率、段落引用覆盖率、引用集合精确匹配率及引用 Precision/Recall/F1。它衡量人工引用标签一致性，不自动证明摘要文本被证据蕴含或事实为真。Memory 报告衡量规则治理的状态、原因、审批和整体决策准确率，不等同于真实用户接受率。报告只保留 Case ID 与指标，不输出被评测正文。
+
+`eval-retrieval` 的上限指标白名单是 `p50_latency_ms` / `p95_latency_ms`。`observability-summary` 支持 `task_success_rate` 下限，以及步骤/模型 P50/P95 延迟、`estimated_cost_microusd` / `estimated_cost_usd` 上限。错误方向、未知指标、负数、NaN 或 Infinity 会作为配置错误返回退出码 `2`，不会被静默忽略。
 
 完整路线见 [实施计划](docs/IMPLEMENTATION_PLAN.md)。
 
