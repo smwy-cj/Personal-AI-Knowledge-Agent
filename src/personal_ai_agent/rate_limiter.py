@@ -1,9 +1,11 @@
 """SQLite-backed smooth provider rate limiting shared across processes."""
 
+import math
 import sqlite3
 import time
 import uuid
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, Optional, Union
 
@@ -12,6 +14,14 @@ from .cancellation import CancellationToken, check_cancelled
 
 class ProviderRateLimitExceeded(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class ProviderCapacityReservation:
+    provider_id: str
+    delay: float
+    token_reservation_id: Optional[str] = None
+    estimated_tokens: Optional[int] = None
 
 
 class SQLiteProviderRateLimiter:
@@ -75,6 +85,36 @@ class SQLiteProviderRateLimiter:
                 ON provider_concurrency_leases(provider_id, lease_until)
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS provider_cooldowns (
+                    provider_id TEXT PRIMARY KEY,
+                    blocked_until REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS provider_token_reservations (
+                    reservation_id TEXT PRIMARY KEY,
+                    provider_id TEXT NOT NULL,
+                    tokens_per_minute INTEGER NOT NULL,
+                    estimated_tokens INTEGER NOT NULL,
+                    reserved_until REAL NOT NULL,
+                    actual_tokens INTEGER,
+                    applied_adjustment_tokens INTEGER,
+                    created_at REAL NOT NULL,
+                    finalized_at REAL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_provider_token_reservation_age
+                ON provider_token_reservations(created_at)
+                """
+            )
 
     def reserve(
         self,
@@ -114,6 +154,22 @@ class SQLiteProviderRateLimiter:
         token_count: Optional[int],
         max_wait_seconds: float,
     ) -> float:
+        return self.reserve_capacity_tracked(
+            provider_id,
+            requests_per_minute,
+            tokens_per_minute,
+            token_count,
+            max_wait_seconds,
+        ).delay
+
+    def reserve_capacity_tracked(
+        self,
+        provider_id: str,
+        requests_per_minute: int,
+        tokens_per_minute: Optional[int],
+        token_count: Optional[int],
+        max_wait_seconds: float,
+    ) -> ProviderCapacityReservation:
         if not provider_id.strip() or requests_per_minute <= 0 or max_wait_seconds < 0:
             raise ValueError("provider rate limit arguments are invalid")
         if (tokens_per_minute is None) != (token_count is None):
@@ -127,8 +183,13 @@ class SQLiteProviderRateLimiter:
                 )
         now = self.clock()
         request_interval = 60.0 / requests_per_minute
+        reservation_id = uuid.uuid4().hex if tokens_per_minute is not None else None
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "DELETE FROM provider_token_reservations WHERE created_at < ?",
+                (now - 7 * 24 * 60 * 60,),
+            )
             request_row = connection.execute(
                 "SELECT next_slot_at FROM provider_rate_limits WHERE provider_id = ?",
                 (provider_id,),
@@ -151,7 +212,14 @@ class SQLiteProviderRateLimiter:
                     now,
                     token_row["next_slot_at"] if token_row is not None else now,
                 )
-            scheduled = max(request_scheduled, token_scheduled)
+            cooldown_row = connection.execute(
+                "SELECT blocked_until FROM provider_cooldowns WHERE provider_id = ?",
+                (provider_id,),
+            ).fetchone()
+            cooldown_until = (
+                cooldown_row["blocked_until"] if cooldown_row is not None else now
+            )
+            scheduled = max(request_scheduled, token_scheduled, cooldown_until)
             delay = scheduled - now
             if delay > max_wait_seconds:
                 raise ProviderRateLimitExceeded(
@@ -168,6 +236,9 @@ class SQLiteProviderRateLimiter:
                 (provider_id, scheduled + request_interval, now),
             )
             if tokens_per_minute is not None and token_count is not None:
+                reserved_until = scheduled + token_count * (
+                    60.0 / tokens_per_minute
+                )
                 connection.execute(
                     """
                     INSERT INTO provider_token_rate_limits(
@@ -180,11 +251,37 @@ class SQLiteProviderRateLimiter:
                     """,
                     (
                         provider_id,
-                        scheduled + token_count * (60.0 / tokens_per_minute),
+                        reserved_until,
                         now,
                     ),
                 )
-        return delay
+                connection.execute(
+                    """
+                    INSERT INTO provider_token_reservations(
+                        reservation_id,
+                        provider_id,
+                        tokens_per_minute,
+                        estimated_tokens,
+                        reserved_until,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        reservation_id,
+                        provider_id,
+                        tokens_per_minute,
+                        token_count,
+                        reserved_until,
+                        now,
+                    ),
+                )
+        return ProviderCapacityReservation(
+            provider_id=provider_id,
+            delay=delay,
+            token_reservation_id=reservation_id,
+            estimated_tokens=token_count,
+        )
 
     def wait_for_capacity(
         self,
@@ -195,16 +292,149 @@ class SQLiteProviderRateLimiter:
         max_wait_seconds: float,
         cancellation_token: Optional[CancellationToken] = None,
     ) -> float:
+        return self.wait_for_capacity_tracked(
+            provider_id,
+            requests_per_minute,
+            tokens_per_minute,
+            token_count,
+            max_wait_seconds,
+            cancellation_token,
+        ).delay
+
+    def wait_for_capacity_tracked(
+        self,
+        provider_id: str,
+        requests_per_minute: int,
+        tokens_per_minute: Optional[int],
+        token_count: Optional[int],
+        max_wait_seconds: float,
+        cancellation_token: Optional[CancellationToken] = None,
+    ) -> ProviderCapacityReservation:
         check_cancelled(cancellation_token)
-        delay = self.reserve_capacity(
+        reservation = self.reserve_capacity_tracked(
             provider_id,
             requests_per_minute,
             tokens_per_minute,
             token_count,
             max_wait_seconds,
         )
-        self._wait(delay, cancellation_token)
-        return delay
+        self._wait(reservation.delay, cancellation_token)
+        return reservation
+
+    def defer_provider(self, provider_id: str, retry_after_seconds: float) -> float:
+        if (
+            not provider_id.strip()
+            or isinstance(retry_after_seconds, bool)
+            or not isinstance(retry_after_seconds, (int, float))
+            or not math.isfinite(retry_after_seconds)
+            or retry_after_seconds < 0
+        ):
+            raise ValueError("provider cooldown arguments are invalid")
+        now = self.clock()
+        requested_until = now + retry_after_seconds
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT blocked_until FROM provider_cooldowns WHERE provider_id = ?",
+                (provider_id,),
+            ).fetchone()
+            blocked_until = max(
+                requested_until,
+                row["blocked_until"] if row is not None else requested_until,
+            )
+            connection.execute(
+                """
+                INSERT INTO provider_cooldowns(provider_id, blocked_until, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(provider_id) DO UPDATE SET
+                    blocked_until = excluded.blocked_until,
+                    updated_at = excluded.updated_at
+                """,
+                (provider_id, blocked_until, now),
+            )
+        return max(0.0, blocked_until - now)
+
+    def reconcile_tokens(
+        self,
+        reservation: ProviderCapacityReservation,
+        actual_tokens: int,
+    ) -> int:
+        if (
+            not isinstance(reservation, ProviderCapacityReservation)
+            or isinstance(actual_tokens, bool)
+            or not isinstance(actual_tokens, int)
+            or actual_tokens < 0
+        ):
+            raise ValueError("provider token reconciliation arguments are invalid")
+        if reservation.token_reservation_id is None:
+            return 0
+        now = self.clock()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT provider_id, tokens_per_minute, estimated_tokens,
+                       reserved_until, actual_tokens, applied_adjustment_tokens
+                FROM provider_token_reservations
+                WHERE reservation_id = ?
+                """,
+                (reservation.token_reservation_id,),
+            ).fetchone()
+            if row is None or row["provider_id"] != reservation.provider_id:
+                raise ValueError("provider token reservation is unknown")
+            if row["actual_tokens"] is not None:
+                if row["actual_tokens"] != actual_tokens:
+                    raise ValueError(
+                        "provider token reservation was already reconciled"
+                    )
+                return int(row["applied_adjustment_tokens"] or 0)
+            token_row = connection.execute(
+                """
+                SELECT next_slot_at
+                FROM provider_token_rate_limits
+                WHERE provider_id = ?
+                """,
+                (reservation.provider_id,),
+            ).fetchone()
+            if token_row is None:
+                raise ValueError("provider token rate limit state is missing")
+            estimated_tokens = int(row["estimated_tokens"])
+            adjustment = actual_tokens - estimated_tokens
+            applied_adjustment = adjustment
+            next_slot_at = float(token_row["next_slot_at"])
+            if adjustment < 0 and abs(
+                next_slot_at - float(row["reserved_until"])
+            ) > 1e-9:
+                applied_adjustment = 0
+            if applied_adjustment != 0:
+                corrected_next_slot = max(
+                    now,
+                    next_slot_at
+                    + applied_adjustment
+                    * (60.0 / int(row["tokens_per_minute"])),
+                )
+                connection.execute(
+                    """
+                    UPDATE provider_token_rate_limits
+                    SET next_slot_at = ?, updated_at = ?
+                    WHERE provider_id = ?
+                    """,
+                    (corrected_next_slot, now, reservation.provider_id),
+                )
+            connection.execute(
+                """
+                UPDATE provider_token_reservations
+                SET actual_tokens = ?, applied_adjustment_tokens = ?, finalized_at = ?
+                WHERE reservation_id = ?
+                """,
+                (
+                    actual_tokens,
+                    applied_adjustment,
+                    now,
+                    reservation.token_reservation_id,
+                ),
+            )
+        return applied_adjustment
 
     def reserve_tokens(
         self,
@@ -280,23 +510,44 @@ class SQLiteProviderRateLimiter:
         lease_seconds: float,
         cancellation_token: Optional[CancellationToken] = None,
     ) -> Iterator[None]:
-        if max_concurrent_requests is None:
-            yield
-            return
         if (
             not provider_id.strip()
-            or max_concurrent_requests <= 0
             or max_wait_seconds < 0
             or lease_seconds <= 0
+            or (
+                max_concurrent_requests is not None
+                and max_concurrent_requests <= 0
+            )
         ):
             raise ValueError("provider concurrency limit arguments are invalid")
-        lease_id = uuid.uuid4().hex
+        lease_id = uuid.uuid4().hex if max_concurrent_requests is not None else None
         deadline = self.clock() + max_wait_seconds
         while True:
             check_cancelled(cancellation_token)
             now = self.clock()
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                cooldown_row = connection.execute(
+                    """
+                    SELECT blocked_until
+                    FROM provider_cooldowns
+                    WHERE provider_id = ?
+                    """,
+                    (provider_id,),
+                ).fetchone()
+                cooldown_until = (
+                    float(cooldown_row["blocked_until"])
+                    if cooldown_row is not None
+                    else now
+                )
+                if cooldown_until > now:
+                    next_available = cooldown_until
+                    should_poll = False
+                elif max_concurrent_requests is None:
+                    break
+                else:
+                    should_poll = True
+                    next_available = now
                 connection.execute(
                     """
                     DELETE FROM provider_concurrency_leases
@@ -304,45 +555,53 @@ class SQLiteProviderRateLimiter:
                     """,
                     (provider_id, now),
                 )
-                row = connection.execute(
-                    """
-                    SELECT COUNT(*) AS lease_count, MIN(lease_until) AS next_expiry
-                    FROM provider_concurrency_leases
-                    WHERE provider_id = ?
-                    """,
-                    (provider_id,),
-                ).fetchone()
-                if row["lease_count"] < max_concurrent_requests:
-                    connection.execute(
+                if cooldown_until <= now and max_concurrent_requests is not None:
+                    row = connection.execute(
                         """
-                        INSERT INTO provider_concurrency_leases(
-                            provider_id, lease_id, lease_until, created_at
-                        )
-                        VALUES (?, ?, ?, ?)
+                        SELECT COUNT(*) AS lease_count,
+                               MIN(lease_until) AS next_expiry
+                        FROM provider_concurrency_leases
+                        WHERE provider_id = ?
                         """,
-                        (provider_id, lease_id, now + lease_seconds, now),
-                    )
-                    break
-                next_expiry = float(row["next_expiry"])
+                        (provider_id,),
+                    ).fetchone()
+                    if row["lease_count"] < max_concurrent_requests:
+                        connection.execute(
+                            """
+                            INSERT INTO provider_concurrency_leases(
+                                provider_id, lease_id, lease_until, created_at
+                            )
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (provider_id, lease_id, now + lease_seconds, now),
+                        )
+                        break
+                    next_available = float(row["next_expiry"])
             remaining = deadline - now
-            if remaining <= 0:
+            required_wait = max(0.0, next_available - now)
+            if remaining <= 0 or required_wait > remaining:
                 raise ProviderRateLimitExceeded(
-                    "provider concurrency wait would exceed the configured maximum"
+                    "provider admission wait would exceed the configured maximum"
                 )
-            delay = min(0.05, remaining, max(0.001, next_expiry - now))
+            delay = (
+                min(0.05, remaining, max(0.001, required_wait))
+                if should_poll
+                else required_wait
+            )
             self._wait(delay, cancellation_token)
         try:
             check_cancelled(cancellation_token)
             yield
         finally:
-            with self._connect() as connection:
-                connection.execute(
-                    """
-                    DELETE FROM provider_concurrency_leases
-                    WHERE provider_id = ? AND lease_id = ?
-                    """,
-                    (provider_id, lease_id),
-                )
+            if lease_id is not None:
+                with self._connect() as connection:
+                    connection.execute(
+                        """
+                        DELETE FROM provider_concurrency_leases
+                        WHERE provider_id = ? AND lease_id = ?
+                        """,
+                        (provider_id, lease_id),
+                    )
 
     def _wait(
         self,

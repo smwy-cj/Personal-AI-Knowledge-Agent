@@ -89,6 +89,47 @@ class ProviderRateLimiterTests(unittest.TestCase):
         )
         self.assertEqual(delays, [10.0])
 
+    def test_provider_cooldown_is_shared_and_never_shortened(self):
+        first = self.limiter()
+        second = self.limiter()
+
+        self.assertEqual(first.defer_provider("provider", 5), 5.0)
+        self.assertEqual(second.defer_provider("provider", 2), 5.0)
+        self.assertEqual(second.reserve("provider", 60, 10), 5.0)
+
+    def test_network_admission_rechecks_cooldown_without_concurrency_limit(self):
+        limiter = self.limiter()
+        limiter.defer_provider("provider", 5)
+
+        with self.assertRaises(ProviderRateLimitExceeded):
+            with limiter.concurrency_slot("provider", None, 0, 30):
+                pass
+
+    def test_actual_token_usage_reconciles_estimate_idempotently(self):
+        limiter = self.limiter()
+        reservation = limiter.reserve_capacity_tracked(
+            "provider", 600, 60, 10, 20
+        )
+
+        self.assertEqual(limiter.reconcile_tokens(reservation, 4), -6)
+        self.assertEqual(limiter.reconcile_tokens(reservation, 4), -6)
+        self.assertEqual(limiter.reserve_tokens("provider", 60, 1, 20), 4.0)
+        with self.assertRaises(ValueError):
+            limiter.reconcile_tokens(reservation, 5)
+
+    def test_underestimate_adds_tokens_and_late_refund_stays_conservative(self):
+        limiter = self.limiter()
+        underestimated = limiter.reserve_capacity_tracked(
+            "under", 600, 60, 5, 20
+        )
+        self.assertEqual(limiter.reconcile_tokens(underestimated, 8), 3)
+        self.assertEqual(limiter.reserve_tokens("under", 60, 1, 20), 8.0)
+
+        first = limiter.reserve_capacity_tracked("queued", 600, 60, 10, 20)
+        limiter.reserve_capacity_tracked("queued", 600, 60, 5, 20)
+        self.assertEqual(limiter.reconcile_tokens(first, 4), 0)
+        self.assertEqual(limiter.reserve_tokens("queued", 60, 1, 20), 15.0)
+
     def test_concurrency_slots_are_shared_and_released(self):
         first = self.limiter()
         second = self.limiter()
