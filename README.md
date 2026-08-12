@@ -225,6 +225,7 @@ task-show <task_id>                 查看持久化任务快照
 task-list <thread_id>               查看会话中的任务
 task-cancel <task_id>               持久化请求取消任务
 task-events <task_id>               查看脱敏结构化运行事件
+cost-report [过滤条件]              按任务、Provider 和时间范围汇总估算模型成本
 events-prune [--older-than-days N]  预览事件保留策略；增加 --apply 才实际清理
 memory-pending <task_id>            查看待决记忆候选
 memory-resolve <task_id> --approve <candidate_id> [--reject <candidate_id>]
@@ -319,11 +320,17 @@ python -m personal_ai_agent --config evaluations/evaluation-agent.config.example
 
 ```powershell
 python -m personal_ai_agent --config agent.config.json observability-summary --limit 1000 --minimum task_success_rate=0.95 --maximum model_p95_latency_ms=30000 --maximum estimated_cost_usd=1
+python -m personal_ai_agent --config agent.config.json cost-report --from 2026-08-01T00:00:00+08:00 --to 2026-09-01T00:00:00+08:00
+python -m personal_ai_agent --config agent.config.json cost-report --task-id task_xxx --provider primary-model --include-calls
 python -m personal_ai_agent --config agent.config.json events-prune --older-than-days 90
 python -m personal_ai_agent --config agent.config.json events-prune --older-than-days 90 --apply
 ```
 
 聚合报告包含最近 N 条脱敏事件窗口内的任务终态分布、成功率、步骤成功/失败数、模型完成/重试数、输入/输出 Token、估算美元成本以及步骤和模型 P50/P95 延迟。它是运行健康视图，不是全历史账单。
+
+`cost-report` 基于全部保留期内的 `model_completed` 脱敏事件，支持 `--from`、`--to`、`--task-id` 和 `--provider` 精确过滤，并同时返回总计、按任务和按 Provider 分组。时间必须是带时区的 ISO-8601；窗口采用起始包含、结束不包含语义，输出统一规范化为 UTC。报告区分有成本估算和缺少成本估算的历史调用，后者仍计入调用、Token 和耗时，但不会被冒充成已知零成本。
+
+默认报告不含逐调用记录；显式 `--include-calls` 后才输出可审计明细，字段限定为事件号、时间、任务/步骤 ID、Provider/模型、任务类型、Prompt 版本、Token、耗时和估算成本，不包含 Prompt、Payload、查询、证据或回答正文。CLI 的 JSON stdout 本身就是可保存的审计导出。金额来自静态配置价格和 Provider 返回的 Usage，单位同时提供整数微美元和美元展示值，不能代替供应商账单。
 
 `observability_retention_days` 默认是 `90`。`events-prune` 默认只返回截止时间和匹配数量，不删除数据；只有显式提供 `--apply` 才执行事务性清理，并保留一条仅含保留天数和删除数量的 `events_pruned` 审计事件。
 
@@ -376,4 +383,4 @@ python -m personal_ai_agent baseline-compare reports/retrieval-reference.json re
 python scripts/verify.py
 ```
 
-该入口统一执行全部单元/集成测试、源码编译检查、CLI 冒烟检查、脱敏固定语料的端到端检索基线、候选基线生成与无退化历史比较。GitHub Actions 会在 Python 3.9、3.11、3.13 以及 Windows/Linux 环境中重复执行，并额外验证安装后的 `personal-ai-agent` 命令。
+该入口统一执行全部单元/集成测试、源码编译检查、CLI 冒烟检查、空成本报告、脱敏固定语料的端到端检索基线、候选基线生成与无退化历史比较。GitHub Actions 会在 Python 3.9、3.11、3.13 以及 Windows/Linux 环境中重复执行，并额外验证安装后的 `personal-ai-agent` 命令。

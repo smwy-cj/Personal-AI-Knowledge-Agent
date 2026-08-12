@@ -133,6 +133,8 @@ class SQLiteEventStore:
                     ON observation_events(event_type, event_id);
                 CREATE INDEX IF NOT EXISTS idx_observation_created_at
                     ON observation_events(created_at);
+                CREATE INDEX IF NOT EXISTS idx_observation_type_created_at
+                    ON observation_events(event_type, created_at, event_id);
                 """
             )
 
@@ -253,6 +255,81 @@ class SQLiteEventStore:
             "model_p95_latency_ms": _percentile(model_durations, 0.95),
         }
 
+    def cost_report(
+        self,
+        from_time: Optional[str] = None,
+        to_time: Optional[str] = None,
+        task_id: Optional[str] = None,
+        provider_id: Optional[str] = None,
+        include_calls: bool = False,
+    ) -> Dict[str, Any]:
+        normalized_from = _utc_bound(from_time, "from")
+        normalized_to = _utc_bound(to_time, "to")
+        if normalized_from is not None and normalized_to is not None:
+            if normalized_from >= normalized_to:
+                raise ValueError("cost report from time must be before to time")
+        task_id = _optional_filter(task_id, "task_id")
+        provider_id = _optional_filter(provider_id, "provider_id")
+        if not isinstance(include_calls, bool):
+            raise ValueError("include_calls must be a boolean")
+
+        clauses = ["event_type = ?"]
+        parameters: List[object] = ["model_completed"]
+        if normalized_from is not None:
+            clauses.append("created_at >= ?")
+            parameters.append(normalized_from)
+        if normalized_to is not None:
+            clauses.append("created_at < ?")
+            parameters.append(normalized_to)
+        if task_id is not None:
+            clauses.append("task_id = ?")
+            parameters.append(task_id)
+        statement = (
+            "SELECT * FROM observation_events WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY created_at, event_id"
+        )
+        with self._connect() as connection:
+            events = [_event(row) for row in connection.execute(statement, parameters)]
+
+        calls = []
+        for event in events:
+            call = _cost_call(event)
+            if provider_id is not None and call["provider_id"] != provider_id:
+                continue
+            calls.append(call)
+
+        by_task: Dict[Optional[str], Dict[str, Any]] = {}
+        by_provider: Dict[Optional[str], Dict[str, Any]] = {}
+        for call in calls:
+            _add_cost(by_task, call["task_id"], "task_id", call)
+            _add_cost(by_provider, call["provider_id"], "provider_id", call)
+        totals = _cost_totals(calls)
+        output: Dict[str, Any] = {
+            "schema": "cost_report_v1",
+            "generated_at": utc_now(),
+            "filters": {
+                "from": normalized_from,
+                "to": normalized_to,
+                "task_id": task_id,
+                "provider_id": provider_id,
+            },
+            "window_semantics": "from_inclusive_to_exclusive",
+            "totals": {
+                **totals,
+                "task_count": len({call["task_id"] for call in calls if call["task_id"]}),
+                "provider_count": len(
+                    {call["provider_id"] for call in calls if call["provider_id"]}
+                ),
+            },
+            "by_task": _sorted_cost_groups(by_task, "task_id"),
+            "by_provider": _sorted_cost_groups(by_provider, "provider_id"),
+            "audit_calls_included": include_calls,
+        }
+        if include_calls:
+            output["calls"] = calls
+        return output
+
     def prune(self, retention_days: int, apply: bool = False) -> Dict[str, Any]:
         if isinstance(retention_days, bool) or not isinstance(retention_days, int) or retention_days <= 0:
             raise ValueError("retention_days must be a positive integer")
@@ -346,3 +423,95 @@ def _percentile(values: List[int], quantile: float) -> int:
         return 0
     ordered = sorted(values)
     return ordered[max(0, math.ceil(quantile * len(ordered)) - 1)]
+
+
+def _utc_bound(value: Optional[str], name: str) -> Optional[str]:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("cost report %s time must be a non-empty ISO-8601 value" % name)
+    raw = value.strip()
+    if raw.endswith("Z") or raw.endswith("z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError("cost report %s time must be valid ISO-8601" % name) from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("cost report %s time must include a timezone" % name)
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
+def _optional_filter(value: Optional[str], name: str) -> Optional[str]:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > 128:
+        raise ValueError("cost report %s filter is invalid" % name)
+    return value.strip()
+
+
+def _cost_call(event: ObservationEvent) -> Dict[str, Any]:
+    attributes = event.attributes
+    has_cost = "estimated_cost_microusd" in attributes
+    cost = _non_negative_integer(attributes.get("estimated_cost_microusd", 0), "cost")
+    return {
+        "event_id": event.event_id,
+        "created_at": event.created_at,
+        "task_id": event.task_id,
+        "step_id": event.step_id,
+        "provider_id": _optional_text(attributes.get("provider_id")),
+        "model_id": _optional_text(attributes.get("model_id")),
+        "task_type": _optional_text(attributes.get("task_type")),
+        "prompt_version": _optional_text(attributes.get("prompt_version")),
+        "input_tokens": _non_negative_integer(attributes.get("input_tokens", 0), "input tokens"),
+        "output_tokens": _non_negative_integer(attributes.get("output_tokens", 0), "output tokens"),
+        "duration_ms": _non_negative_integer(attributes.get("duration_ms", 0), "duration"),
+        "has_cost_estimate": has_cost,
+        "estimated_cost_microusd": cost,
+        "estimated_cost_usd": cost / 1_000_000,
+    }
+
+
+def _non_negative_integer(value: Any, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("model cost event has invalid %s" % name)
+    return value
+
+
+def _optional_text(value: Any) -> Optional[str]:
+    return value if isinstance(value, str) and value else None
+
+
+def _cost_totals(calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+    cost = sum(int(call["estimated_cost_microusd"]) for call in calls)
+    estimated = sum(bool(call["has_cost_estimate"]) for call in calls)
+    return {
+        "model_call_count": len(calls),
+        "calls_with_cost_estimate": estimated,
+        "calls_without_cost_estimate": len(calls) - estimated,
+        "input_tokens": sum(int(call["input_tokens"]) for call in calls),
+        "output_tokens": sum(int(call["output_tokens"]) for call in calls),
+        "duration_ms": sum(int(call["duration_ms"]) for call in calls),
+        "estimated_cost_microusd": cost,
+        "estimated_cost_usd": cost / 1_000_000,
+    }
+
+
+def _add_cost(
+    groups: Dict[Optional[str], Dict[str, Any]],
+    key: Optional[str],
+    key_name: str,
+    call: Dict[str, Any],
+) -> None:
+    group = groups.setdefault(key, {key_name: key, "_calls": []})
+    group["_calls"].append(call)
+
+
+def _sorted_cost_groups(
+    groups: Dict[Optional[str], Dict[str, Any]], key_name: str
+) -> List[Dict[str, Any]]:
+    output = []
+    for key in sorted(groups, key=lambda value: (value is None, value or "")):
+        group = groups[key]
+        output.append({key_name: key, **_cost_totals(group["_calls"])})
+    return output

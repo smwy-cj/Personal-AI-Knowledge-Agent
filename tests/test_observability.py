@@ -189,6 +189,100 @@ class ObservabilityTests(unittest.TestCase):
         self.assertEqual(events[0].event_type, "events_pruned")
         self.assertEqual(events[0].attributes["deleted_count"], 1)
 
+    def test_cost_report_filters_time_task_and_provider_and_groups_totals(self):
+        first = self.store.record(
+            "model_completed",
+            "task-a",
+            "summary",
+            {
+                "provider_id": "provider-a",
+                "model_id": "model-a",
+                "task_type": "summary",
+                "prompt_version": "v1",
+                "input_tokens": 100,
+                "output_tokens": 20,
+                "duration_ms": 50,
+                "model_call_count": 1,
+                "estimated_cost_microusd": 120,
+            },
+        )
+        second = self.store.record(
+            "model_completed",
+            "task-b",
+            "summary",
+            {
+                "provider_id": "provider-b",
+                "model_id": "model-b",
+                "task_type": "summary",
+                "prompt_version": "v2",
+                "input_tokens": 200,
+                "output_tokens": 40,
+                "duration_ms": 80,
+                "model_call_count": 1,
+                "estimated_cost_microusd": 240,
+            },
+        )
+        with self.store._connect() as connection:
+            connection.execute(
+                "UPDATE observation_events SET created_at = ? WHERE event_id = ?",
+                ("2026-08-10T00:00:00+00:00", first),
+            )
+            connection.execute(
+                "UPDATE observation_events SET created_at = ? WHERE event_id = ?",
+                ("2026-08-11T00:00:00+00:00", second),
+            )
+
+        report = self.store.cost_report(
+            "2026-08-10T08:00:00+08:00",
+            "2026-08-11T08:00:00+08:00",
+            include_calls=True,
+        )
+
+        self.assertEqual(report["schema"], "cost_report_v1")
+        self.assertEqual(report["window_semantics"], "from_inclusive_to_exclusive")
+        self.assertEqual(report["totals"]["model_call_count"], 1)
+        self.assertEqual(report["totals"]["estimated_cost_microusd"], 120)
+        self.assertEqual(report["totals"]["task_count"], 1)
+        self.assertEqual(report["totals"]["provider_count"], 1)
+        self.assertEqual(report["by_task"][0]["task_id"], "task-a")
+        self.assertEqual(report["by_provider"][0]["provider_id"], "provider-a")
+        self.assertEqual(report["calls"][0]["event_id"], first)
+        self.assertNotIn("attributes", report["calls"][0])
+
+        filtered = self.store.cost_report(task_id="task-b", provider_id="provider-b")
+        self.assertEqual(filtered["totals"]["estimated_cost_microusd"], 240)
+        self.assertFalse(filtered["audit_calls_included"])
+        self.assertNotIn("calls", filtered)
+
+    def test_cost_report_tracks_missing_estimates_and_rejects_invalid_windows(self):
+        self.store.record(
+            "model_completed",
+            "legacy-task",
+            attributes={
+                "provider_id": "legacy-provider",
+                "model_id": "legacy-model",
+                "task_type": "summary",
+                "prompt_version": "v1",
+                "input_tokens": 10,
+                "output_tokens": 2,
+                "duration_ms": 30,
+                "model_call_count": 1,
+            },
+        )
+
+        report = self.store.cost_report()
+
+        self.assertEqual(report["totals"]["calls_with_cost_estimate"], 0)
+        self.assertEqual(report["totals"]["calls_without_cost_estimate"], 1)
+        self.assertEqual(report["totals"]["estimated_cost_microusd"], 0)
+        with self.assertRaises(ValueError):
+            self.store.cost_report(from_time="2026-08-10T00:00:00")
+        with self.assertRaises(ValueError):
+            self.store.cost_report(
+                from_time="2026-08-11T00:00:00Z",
+                to_time="2026-08-10T00:00:00Z",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

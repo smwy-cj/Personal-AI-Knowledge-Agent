@@ -73,6 +73,33 @@ def main() -> int:
         )
         if sync.returncode != 0:
             return sync.returncode
+        cost_report = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "personal_ai_agent",
+                "--config",
+                str(config_path),
+                "cost-report",
+                "--include-calls",
+            ],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if cost_report.returncode != 0:
+            sys.stdout.write(cost_report.stdout)
+            sys.stderr.write(cost_report.stderr)
+            return cost_report.returncode
+        cost_document = json.loads(cost_report.stdout)
+        if (
+            cost_document.get("schema") != "cost_report_v1"
+            or cost_document.get("calls") != []
+            or cost_document.get("totals", {}).get("model_call_count") != 0
+        ):
+            return 1
         evaluation = subprocess.run(
             [
                 sys.executable,

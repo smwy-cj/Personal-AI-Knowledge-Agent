@@ -85,6 +85,14 @@ def build_parser() -> argparse.ArgumentParser:
     summary.add_argument("--minimum", action="append", default=[])
     summary.add_argument("--maximum", action="append", default=[])
     summary.add_argument("--baseline")
+    cost = subcommands.add_parser(
+        "cost-report", help="Report estimated model cost by task and provider"
+    )
+    cost.add_argument("--from", dest="from_time")
+    cost.add_argument("--to", dest="to_time")
+    cost.add_argument("--task-id")
+    cost.add_argument("--provider")
+    cost.add_argument("--include-calls", action="store_true")
     candidate = subcommands.add_parser(
         "baseline-candidate", help="Generate a pending quality baseline from a report"
     )
@@ -210,6 +218,14 @@ def _run_service_command(service, arguments, parser):
             _minimums(arguments.minimum),
             _maximums(arguments.maximum),
             arguments.baseline,
+        )
+    elif arguments.command == "cost-report":
+        result = service.cost_report(
+            arguments.from_time,
+            arguments.to_time,
+            arguments.task_id,
+            arguments.provider,
+            arguments.include_calls,
         )
     elif arguments.command == "events-prune":
         result = service.prune_observability_events(

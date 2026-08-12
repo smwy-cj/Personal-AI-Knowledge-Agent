@@ -556,6 +556,49 @@ class ApplicationCliTests(unittest.TestCase):
         self.assertEqual(output, "")
         self.assertIn("unsupported maximum gate metric", errors)
 
+    def test_cli_cost_report_exports_private_grouped_audit_data(self):
+        service = ApplicationService.from_file(str(self.config_path))
+        service.event_store.record(
+            "model_completed",
+            "task-cost",
+            "summary",
+            {
+                "provider_id": "provider-cost",
+                "model_id": "model-cost",
+                "task_type": "summary",
+                "prompt_version": "v1",
+                "input_tokens": 8,
+                "output_tokens": 2,
+                "duration_ms": 75,
+                "model_call_count": 1,
+                "estimated_cost_microusd": 54,
+            },
+        )
+
+        code, output, errors = self.invoke(
+            "cost-report",
+            "--task-id",
+            "task-cost",
+            "--provider",
+            "provider-cost",
+            "--include-calls",
+        )
+
+        self.assertEqual((code, errors), (0, ""))
+        report = json.loads(output)
+        self.assertEqual(report["totals"]["estimated_cost_microusd"], 54)
+        self.assertEqual(report["by_task"][0]["task_id"], "task-cost")
+        self.assertEqual(report["by_provider"][0]["provider_id"], "provider-cost")
+        self.assertEqual(report["calls"][0]["model_id"], "model-cost")
+        self.assertNotIn("payload", output.lower())
+        self.assertNotIn("content", output.lower())
+
+        code, output, errors = self.invoke(
+            "cost-report", "--from", "2026-08-12T00:00:00"
+        )
+        self.assertEqual((code, output), (2, ""))
+        self.assertIn("must include a timezone", errors)
+
     def test_cli_research_and_memory_quality_gates_use_distinct_exit_code(self):
         research = self.root / "research-eval.json"
         research.write_text(

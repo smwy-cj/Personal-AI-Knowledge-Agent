@@ -341,6 +341,18 @@ class ApplicationService:
             output["quality_baseline"] = baseline
         return output
 
+    def cost_report(
+        self,
+        from_time: Optional[str] = None,
+        to_time: Optional[str] = None,
+        task_id: Optional[str] = None,
+        provider_id: Optional[str] = None,
+        include_calls: bool = False,
+    ) -> Dict[str, object]:
+        return self.event_store.cost_report(
+            from_time, to_time, task_id, provider_id, include_calls
+        )
+
     def prune_observability_events(
         self, retention_days: Optional[int] = None, apply: bool = False
     ) -> Dict[str, object]:
