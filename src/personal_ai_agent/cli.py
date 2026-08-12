@@ -93,6 +93,12 @@ def build_parser() -> argparse.ArgumentParser:
     cost.add_argument("--task-id")
     cost.add_argument("--provider")
     cost.add_argument("--include-calls", action="store_true")
+    billing = subcommands.add_parser(
+        "billing-reconcile", help="Reconcile a provider bill with local cost estimates"
+    )
+    billing.add_argument("statement")
+    billing.add_argument("--absolute-tolerance-microusd", type=int, default=100)
+    billing.add_argument("--relative-tolerance", type=float, default=0.05)
     candidate = subcommands.add_parser(
         "baseline-candidate", help="Generate a pending quality baseline from a report"
     )
@@ -227,6 +233,12 @@ def _run_service_command(service, arguments, parser):
             arguments.provider,
             arguments.include_calls,
         )
+    elif arguments.command == "billing-reconcile":
+        result = service.reconcile_billing(
+            arguments.statement,
+            arguments.absolute_tolerance_microusd,
+            arguments.relative_tolerance,
+        )
     elif arguments.command == "events-prune":
         result = service.prune_observability_events(
             arguments.older_than_days, arguments.apply
@@ -241,6 +253,8 @@ def _result_exit_code(result: Any) -> int:
     if not isinstance(result, dict):
         return 0
     if result.get("gate_passed") is False:
+        return 3
+    if result.get("reconciliation_passed") is False:
         return 3
     summary = result.get("summary")
     if isinstance(summary, dict) and summary.get("regression_detected") is True:

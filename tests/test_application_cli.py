@@ -599,6 +599,70 @@ class ApplicationCliTests(unittest.TestCase):
         self.assertEqual((code, output), (2, ""))
         self.assertIn("must include a timezone", errors)
 
+    def test_cli_billing_reconciliation_uses_exit_three_for_mismatch(self):
+        service = ApplicationService.from_file(str(self.config_path))
+        event_id = service.event_store.record(
+            "model_completed",
+            "task-billing",
+            "summary",
+            {
+                "provider_id": "provider-billing",
+                "model_id": "model-billing",
+                "task_type": "summary",
+                "prompt_version": "v1",
+                "input_tokens": 8,
+                "output_tokens": 2,
+                "duration_ms": 75,
+                "model_call_count": 1,
+                "estimated_cost_microusd": 500,
+            },
+        )
+        with service.event_store._connect() as connection:
+            connection.execute(
+                "UPDATE observation_events SET created_at = ? WHERE event_id = ?",
+                ("2026-08-15T00:00:00+00:00", event_id),
+            )
+        statement = self.root / "billing.json"
+        statement.write_text(
+            json.dumps(
+                {
+                    "schema": "provider_billing_statement_v1",
+                    "statement_id": "cli-statement-v1",
+                    "provider_id": "provider-billing",
+                    "currency": "USD",
+                    "period": {
+                        "from": "2026-08-01T00:00:00Z",
+                        "to": "2026-09-01T00:00:00Z",
+                    },
+                    "total_billed_cost_microusd": 100,
+                    "models": [
+                        {
+                            "model_id": "model-billing",
+                            "input_tokens": 8,
+                            "output_tokens": 2,
+                            "billed_cost_microusd": 100,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        code, output, errors = self.invoke(
+            "billing-reconcile",
+            str(statement),
+            "--absolute-tolerance-microusd",
+            "0",
+            "--relative-tolerance",
+            "0",
+        )
+
+        self.assertEqual((code, errors), (3, ""))
+        report = json.loads(output)
+        self.assertFalse(report["reconciliation_passed"])
+        self.assertEqual(report["summary"]["difference_microusd"], 400)
+        self.assertNotIn(str(statement), output)
+
     def test_cli_research_and_memory_quality_gates_use_distinct_exit_code(self):
         research = self.root / "research-eval.json"
         research.write_text(

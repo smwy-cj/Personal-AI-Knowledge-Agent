@@ -226,6 +226,7 @@ task-list <thread_id>               查看会话中的任务
 task-cancel <task_id>               持久化请求取消任务
 task-events <task_id>               查看脱敏结构化运行事件
 cost-report [过滤条件]              按任务、Provider 和时间范围汇总估算模型成本
+billing-reconcile <statement.json>  将供应商账单与本地成本估算进行差异对账
 events-prune [--older-than-days N]  预览事件保留策略；增加 --apply 才实际清理
 memory-pending <task_id>            查看待决记忆候选
 memory-resolve <task_id> --approve <candidate_id> [--reject <candidate_id>]
@@ -322,6 +323,8 @@ python -m personal_ai_agent --config evaluations/evaluation-agent.config.example
 python -m personal_ai_agent --config agent.config.json observability-summary --limit 1000 --minimum task_success_rate=0.95 --maximum model_p95_latency_ms=30000 --maximum estimated_cost_usd=1
 python -m personal_ai_agent --config agent.config.json cost-report --from 2026-08-01T00:00:00+08:00 --to 2026-09-01T00:00:00+08:00
 python -m personal_ai_agent --config agent.config.json cost-report --task-id task_xxx --provider primary-model --include-calls
+python -m personal_ai_agent --config agent.config.json billing-reconcile evaluations/billing/provider.example.json
+python -m personal_ai_agent --config agent.config.json billing-reconcile provider-bill.json --absolute-tolerance-microusd 100 --relative-tolerance 0.05
 python -m personal_ai_agent --config agent.config.json events-prune --older-than-days 90
 python -m personal_ai_agent --config agent.config.json events-prune --older-than-days 90 --apply
 ```
@@ -331,6 +334,10 @@ python -m personal_ai_agent --config agent.config.json events-prune --older-than
 `cost-report` 基于全部保留期内的 `model_completed` 脱敏事件，支持 `--from`、`--to`、`--task-id` 和 `--provider` 精确过滤，并同时返回总计、按任务和按 Provider 分组。时间必须是带时区的 ISO-8601；窗口采用起始包含、结束不包含语义，输出统一规范化为 UTC。报告区分有成本估算和缺少成本估算的历史调用，后者仍计入调用、Token 和耗时，但不会被冒充成已知零成本。
 
 默认报告不含逐调用记录；显式 `--include-calls` 后才输出可审计明细，字段限定为事件号、时间、任务/步骤 ID、Provider/模型、任务类型、Prompt 版本、Token、耗时和估算成本，不包含 Prompt、Payload、查询、证据或回答正文。CLI 的 JSON stdout 本身就是可保存的审计导出。金额来自静态配置价格和 Provider 返回的 Usage，单位同时提供整数微美元和美元展示值，不能代替供应商账单。
+
+`billing-reconcile` 接收严格的 `provider_billing_statement_v1` JSON。每份账单绑定一个 Provider、一个带时区且起始包含/结束不包含的周期、USD 微美元总额和按模型唯一的 Token/金额明细；根对象与模型行都拒绝未知字段，因此账户号、支付信息、凭据和供应商原始响应不能进入导入文件。脱敏结构示例见 `evaluations/billing/provider.example.json`。
+
+对账按 Provider、周期和模型汇总本地 `model_completed` 事件，用整数微美元比较本地估算与供应商账单。默认有效容差为“100 微美元或账单金额的 5%，取较大者”，可通过 `--absolute-tolerance-microusd` 和 `--relative-tolerance` 收紧。模型缺失、总额或任一模型超差、存在未估算成本的本地调用时，命令返回 `3`，stdout 仍包含完整差异报告；非法账单或参数返回 `2`。报告保存账单 ID、Provider、周期和规范化账单 SHA-256，不记录导入文件路径，也不包含逐调用正文。Token 差异同时报告用于诊断，但当前门禁以模型映射、成本差异和估算完整性为准。
 
 `observability_retention_days` 默认是 `90`。`events-prune` 默认只返回截止时间和匹配数量，不删除数据；只有显式提供 `--apply` 才执行事务性清理，并保留一条仅含保留天数和删除数量的 `events_pruned` 审计事件。
 
@@ -383,4 +390,4 @@ python -m personal_ai_agent baseline-compare reports/retrieval-reference.json re
 python scripts/verify.py
 ```
 
-该入口统一执行全部单元/集成测试、源码编译检查、CLI 冒烟检查、空成本报告、脱敏固定语料的端到端检索基线、候选基线生成与无退化历史比较。GitHub Actions 会在 Python 3.9、3.11、3.13 以及 Windows/Linux 环境中重复执行，并额外验证安装后的 `personal-ai-agent` 命令。
+该入口统一执行全部单元/集成测试、源码编译检查、CLI 冒烟检查、空成本报告与账单对账、脱敏固定语料的端到端检索基线、候选基线生成与无退化历史比较。GitHub Actions 会在 Python 3.9、3.11、3.13 以及 Windows/Linux 环境中重复执行，并额外验证安装后的 `personal-ai-agent` 命令。

@@ -5,6 +5,7 @@ from typing import Dict, Iterable, List, Optional
 from uuid import uuid4
 
 from .cancellation import CancellationToken
+from .billing import reconcile_provider_billing
 from .config import ApplicationConfig, EmbeddingProviderConfig
 from .hybrid_search import HybridSearchEngine
 from .knowledge import (
@@ -351,6 +352,19 @@ class ApplicationService:
     ) -> Dict[str, object]:
         return self.event_store.cost_report(
             from_time, to_time, task_id, provider_id, include_calls
+        )
+
+    def reconcile_billing(
+        self,
+        statement_path: str,
+        absolute_tolerance_microusd: int = 100,
+        relative_tolerance: float = 0.05,
+    ) -> Dict[str, object]:
+        return reconcile_provider_billing(
+            self.event_store,
+            statement_path,
+            absolute_tolerance_microusd,
+            relative_tolerance,
         )
 
     def prune_observability_events(

@@ -1,6 +1,7 @@
 """Personal AI Knowledge Agent runtime primitives."""
 
 from .application import ApplicationService
+from .billing import ProviderBillingStatement, reconcile_provider_billing
 from .cancellation import CancellationToken, OperationCancelled
 from .config import (
     ApplicationConfig,
@@ -89,6 +90,8 @@ __all__ = [
     "AgentTaskState",
     "ApplicationConfig",
     "ApplicationService",
+    "ProviderBillingStatement",
+    "reconcile_provider_billing",
     "CancellationToken",
     "ConfigurationError",
     "EmbeddingProviderConfig",

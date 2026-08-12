@@ -100,6 +100,47 @@ def main() -> int:
             or cost_document.get("totals", {}).get("model_call_count") != 0
         ):
             return 1
+        statement_path = fixture_root / "empty-provider-statement.json"
+        statement_path.write_text(
+            json.dumps(
+                {
+                    "schema": "provider_billing_statement_v1",
+                    "statement_id": "verification-empty-statement",
+                    "provider_id": "verification-provider",
+                    "currency": "USD",
+                    "period": {
+                        "from": "2026-01-01T00:00:00Z",
+                        "to": "2027-01-01T00:00:00Z",
+                    },
+                    "total_billed_cost_microusd": 0,
+                    "models": [],
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        reconciliation = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "personal_ai_agent",
+                "--config",
+                str(config_path),
+                "billing-reconcile",
+                str(statement_path),
+            ],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if reconciliation.returncode != 0:
+            sys.stdout.write(reconciliation.stdout)
+            sys.stderr.write(reconciliation.stderr)
+            return reconciliation.returncode
+        if not json.loads(reconciliation.stdout).get("reconciliation_passed"):
+            return 1
         evaluation = subprocess.run(
             [
                 sys.executable,

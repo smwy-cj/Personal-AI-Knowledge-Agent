@@ -263,8 +263,8 @@ class SQLiteEventStore:
         provider_id: Optional[str] = None,
         include_calls: bool = False,
     ) -> Dict[str, Any]:
-        normalized_from = _utc_bound(from_time, "from")
-        normalized_to = _utc_bound(to_time, "to")
+        normalized_from = normalize_utc_bound(from_time, "from")
+        normalized_to = normalize_utc_bound(to_time, "to")
         if normalized_from is not None and normalized_to is not None:
             if normalized_from >= normalized_to:
                 raise ValueError("cost report from time must be before to time")
@@ -425,7 +425,7 @@ def _percentile(values: List[int], quantile: float) -> int:
     return ordered[max(0, math.ceil(quantile * len(ordered)) - 1)]
 
 
-def _utc_bound(value: Optional[str], name: str) -> Optional[str]:
+def normalize_utc_bound(value: Optional[str], name: str) -> Optional[str]:
     if value is None:
         return None
     if not isinstance(value, str) or not value.strip():
