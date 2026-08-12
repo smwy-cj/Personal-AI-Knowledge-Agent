@@ -260,9 +260,14 @@ Provider 可靠性边界：
 ```json
 {
   "requests_per_minute": 60,
-  "max_rate_limit_wait_seconds": 30
+  "max_rate_limit_wait_seconds": 30,
+  "tokens_per_minute": 60000,
+  "max_concurrent_requests": 4,
+  "concurrency_lease_seconds": 60
 }
 ```
+
+`tokens_per_minute` 与 `max_concurrent_requests` 都是可选项；省略时保持原有的仅按请求频率限流行为。模型调用按“预计输入 Token + 最大输出 Token”预留额度。Embedding 无法在调用前取得供应商 Usage，因此可用 `estimated_tokens_per_input`（默认 `256`）为每条输入配置保守估算。
 
 模型 Provider 还可声明公开价格元数据：
 
@@ -275,7 +280,7 @@ Provider 可靠性边界：
 
 价格按每百万 Token 的美元单价配置。系统只对成功响应中供应商实际返回的输入/输出 Token 计价，以整数微美元写入脱敏事件；失败调用若没有 Usage 数据则无法估算，因此聚合金额是可审计估算值，不是供应商账单。
 
-限流器通过独立 SQLite 数据库原子预约调用时隙，同一数据目录下的多个 CLI/进程共享配额。它采用平滑间隔：每分钟 60 次表示约每秒一个调用，而不是允许一分钟开始时同时突发 60 次。预计等待超过本地硬上限时调用直接失败；等待模型请求时可响应任务取消。Embedding 的每个真实 HTTP 子批次分别消耗一个时隙。
+限流器通过独立 SQLite 数据库原子预约请求与 Token 时隙，同一数据目录下的多个 CLI/进程共享配额。它采用平滑间隔：每分钟 60 次表示约每秒一个调用，而不是允许一分钟开始时同时突发 60 次。预计等待超过本地硬上限时调用直接失败；等待期间可响应任务取消。并发名额只包围真实 HTTP 调用，并以可过期 SQLite 租约防止进程中断永久占位；正常响应、异常和 Embedding `413` 拆批都会及时释放。Embedding 的父批次及每个实际重试子批次分别计入请求与估算 Token 配额。
 
 执行控制面现已提供 SQLite 租约、后台心跳和持久化取消请求。同一任务只有一个活跃 owner 可以执行或恢复；租约过期后其他进程才能接管，旧 owner 在每次 Checkpoint 前会重新验证所有权。`task-cancel` 对闲置或等待确认的任务立即落盘为 `CANCELLED`；对正在执行的任务登记取消请求，由运行者在步骤边界、Provider 调用前或重试等待期确认并写入最终状态。
 

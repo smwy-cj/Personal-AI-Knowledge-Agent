@@ -2,9 +2,10 @@
 
 import json
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -37,35 +38,54 @@ class OpenAICompatibleModelProvider:
 
     def generate(self, request: ModelRequest) -> ProviderResponse:
         if self.rate_limiter is not None:
-            self.rate_limiter.wait(
+            quota_delay = self.rate_limiter.wait_for_capacity(
                 self.provider_id,
                 self.config.requests_per_minute,
+                self.config.tokens_per_minute,
+                (
+                    request.estimated_input_tokens + request.max_output_tokens
+                    if self.config.tokens_per_minute is not None
+                    else None
+                ),
                 self.config.max_rate_limit_wait_seconds,
                 request.cancellation_token,
             )
-        document = _post_json(
-            self.config.base_url + "/chat/completions",
-            {
-                "model": self.config.model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": (
-                            "Return one JSON object only. Follow the requested schema and "
-                            "do not add markdown fences."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": json.dumps(request.payload, ensure_ascii=False),
-                    },
-                ],
-                "response_format": {"type": "json_object"},
-                "max_tokens": request.max_output_tokens,
-            },
-            self.config.credential_env,
-            request.timeout_seconds,
-        )
+            concurrency = self.rate_limiter.concurrency_slot(
+                self.provider_id,
+                self.config.max_concurrent_requests,
+                max(0.0, self.config.max_rate_limit_wait_seconds - quota_delay),
+                max(
+                    self.config.concurrency_lease_seconds,
+                    request.timeout_seconds + 5.0,
+                ),
+                request.cancellation_token,
+            )
+        else:
+            concurrency = _unlimited_concurrency()
+        with concurrency:
+            document = _post_json(
+                self.config.base_url + "/chat/completions",
+                {
+                    "model": self.config.model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "Return one JSON object only. Follow the requested schema and "
+                                "do not add markdown fences."
+                            ),
+                        },
+                        {
+                            "role": "user",
+                            "content": json.dumps(request.payload, ensure_ascii=False),
+                        },
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "max_tokens": request.max_output_tokens,
+                },
+                self.config.credential_env,
+                request.timeout_seconds,
+            )
         try:
             content = document["choices"][0]["message"]["content"]
             data = content if isinstance(content, dict) else json.loads(content)
@@ -105,18 +125,34 @@ class OpenAICompatibleEmbeddingProvider:
     def _embed_batch(self, texts: List[str]) -> List[Sequence[float]]:
         try:
             if self.rate_limiter is not None:
-                self.rate_limiter.wait(
+                quota_delay = self.rate_limiter.wait_for_capacity(
                     self.provider_id,
                     self.config.requests_per_minute,
+                    self.config.tokens_per_minute,
+                    (
+                        len(texts) * self.config.estimated_tokens_per_input
+                        if self.config.tokens_per_minute is not None
+                        else None
+                    ),
                     self.config.max_rate_limit_wait_seconds,
                     self.cancellation_token,
                 )
-            document = _post_json(
-                self.config.base_url + "/embeddings",
-                {"model": self.config.model, "input": texts},
-                self.config.credential_env,
-                30.0,
-            )
+                concurrency = self.rate_limiter.concurrency_slot(
+                    self.provider_id,
+                    self.config.max_concurrent_requests,
+                    max(0.0, self.config.max_rate_limit_wait_seconds - quota_delay),
+                    max(self.config.concurrency_lease_seconds, 35.0),
+                    self.cancellation_token,
+                )
+            else:
+                concurrency = _unlimited_concurrency()
+            with concurrency:
+                document = _post_json(
+                    self.config.base_url + "/embeddings",
+                    {"model": self.config.model, "input": texts},
+                    self.config.credential_env,
+                    30.0,
+                )
         except ProviderPayloadTooLarge:
             if len(texts) == 1:
                 raise ProviderPayloadTooLarge(
@@ -180,6 +216,11 @@ def _post_json(
     if not isinstance(document, dict):
         raise ProviderProtocolError("provider response must be a JSON object")
     return document
+
+
+@contextmanager
+def _unlimited_concurrency() -> Iterator[None]:
+    yield
 
 
 def _usage_integer(usage: Dict[str, Any], key: str) -> int:

@@ -58,6 +58,9 @@ class ApplicationConfigTests(unittest.TestCase):
                                 "max_context_tokens": 8192,
                                 "input_cost_per_million_tokens_usd": 2.5,
                                 "output_cost_per_million_tokens_usd": 10,
+                                "tokens_per_minute": 90000,
+                                "max_concurrent_requests": 3,
+                                "concurrency_lease_seconds": 45,
                             }
                         ],
                         "embedding_providers": [
@@ -66,6 +69,9 @@ class ApplicationConfigTests(unittest.TestCase):
                                 "base_url": "http://127.0.0.1:9000/v1",
                                 "model": "embed-v1",
                                 "dimension": 4,
+                                "tokens_per_minute": 120000,
+                                "max_concurrent_requests": 4,
+                                "estimated_tokens_per_input": 128,
                             }
                         ],
                     }
@@ -84,6 +90,12 @@ class ApplicationConfigTests(unittest.TestCase):
             )
             self.assertEqual(
                 config.model_providers[0].output_cost_per_million_tokens_usd, 10.0
+            )
+            self.assertEqual(config.model_providers[0].tokens_per_minute, 90000)
+            self.assertEqual(config.model_providers[0].max_concurrent_requests, 3)
+            self.assertEqual(config.embedding_providers[0].tokens_per_minute, 120000)
+            self.assertEqual(
+                config.embedding_providers[0].estimated_tokens_per_input, 128
             )
 
     def test_rejects_invalid_prices_and_retention(self):
@@ -166,6 +178,39 @@ class ApplicationConfigTests(unittest.TestCase):
                                         "max_rate_limit_wait_seconds": wait,
                                     }
                                 ],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    with self.assertRaises(ConfigurationError):
+                        ApplicationConfig.load(path)
+
+    def test_rejects_invalid_provider_token_and_concurrency_limits(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "vault").mkdir()
+            path = root / "agent.json"
+            invalid_limits = [
+                {"tokens_per_minute": 0},
+                {"max_concurrent_requests": 0},
+                {"concurrency_lease_seconds": 0},
+                {"estimated_tokens_per_input": 0},
+            ]
+            for limits in invalid_limits:
+                with self.subTest(limits=limits):
+                    provider = {
+                        "provider_id": "embed",
+                        "base_url": "http://127.0.0.1:9000/v1",
+                        "model": "embed-v1",
+                        "dimension": 4,
+                    }
+                    provider.update(limits)
+                    path.write_text(
+                        json.dumps(
+                            {
+                                "vault_path": "vault",
+                                "data_directory": "runtime",
+                                "embedding_providers": [provider],
                             }
                         ),
                         encoding="utf-8",

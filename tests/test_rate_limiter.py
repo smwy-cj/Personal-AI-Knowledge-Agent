@@ -62,6 +62,57 @@ class ProviderRateLimiterTests(unittest.TestCase):
         with self.assertRaises(OperationCancelled):
             limiter.wait("another", 60, 10, token)
 
+    def test_token_reservations_are_shared_and_weighted(self):
+        first = self.limiter()
+        second = self.limiter()
+
+        self.assertEqual(first.reserve_tokens("provider", 60, 10, 20), 0.0)
+        self.assertEqual(second.reserve_tokens("provider", 60, 5, 20), 10.0)
+        self.clock.value += 4.0
+        self.assertEqual(first.reserve_tokens("provider", 60, 1, 20), 11.0)
+
+    def test_oversized_token_reservation_does_not_consume_quota(self):
+        limiter = self.limiter()
+
+        with self.assertRaises(ProviderRateLimitExceeded):
+            limiter.reserve_tokens("provider", 100, 101, 30)
+
+        self.assertEqual(limiter.reserve_tokens("provider", 100, 1, 0), 0.0)
+
+    def test_request_and_token_capacity_wait_once_for_the_larger_delay(self):
+        delays = []
+        limiter = self.limiter(delays.append)
+
+        self.assertEqual(limiter.reserve_capacity("provider", 60, 60, 10, 20), 0.0)
+        self.assertEqual(
+            limiter.wait_for_capacity("provider", 60, 60, 5, 20), 10.0
+        )
+        self.assertEqual(delays, [10.0])
+
+    def test_concurrency_slots_are_shared_and_released(self):
+        first = self.limiter()
+        second = self.limiter()
+
+        with first.concurrency_slot("provider", 1, 0, 30):
+            with self.assertRaises(ProviderRateLimitExceeded):
+                with second.concurrency_slot("provider", 1, 0, 30):
+                    pass
+
+        with second.concurrency_slot("provider", 1, 0, 30):
+            pass
+
+    def test_expired_concurrency_lease_is_recovered(self):
+        first = self.limiter()
+        second = self.limiter()
+        stale = first.concurrency_slot("provider", 1, 0, 5)
+        stale.__enter__()
+        try:
+            self.clock.value += 5.0
+            with second.concurrency_slot("provider", 1, 0, 5):
+                pass
+        finally:
+            stale.__exit__(None, None, None)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -38,6 +38,9 @@ class ModelProviderConfig:
     max_rate_limit_wait_seconds: float = 30.0
     input_cost_per_million_tokens_usd: float = 0.0
     output_cost_per_million_tokens_usd: float = 0.0
+    tokens_per_minute: Optional[int] = None
+    max_concurrent_requests: Optional[int] = None
+    concurrency_lease_seconds: float = 60.0
 
 
 @dataclass(frozen=True)
@@ -50,6 +53,10 @@ class EmbeddingProviderConfig:
     batch_size: int = 32
     requests_per_minute: int = 60
     max_rate_limit_wait_seconds: float = 30.0
+    tokens_per_minute: Optional[int] = None
+    max_concurrent_requests: Optional[int] = None
+    concurrency_lease_seconds: float = 60.0
+    estimated_tokens_per_input: int = 256
 
 
 @dataclass(frozen=True)
@@ -160,6 +167,7 @@ def _model_providers(value: Any) -> List[ModelProviderConfig]:
         "provider_id", "base_url", "model", "credential_env", "capabilities",
         "max_context_tokens", "cost_level", "max_privacy_level", "priority",
         "requests_per_minute", "max_rate_limit_wait_seconds",
+        "tokens_per_minute", "max_concurrent_requests", "concurrency_lease_seconds",
         "input_cost_per_million_tokens_usd",
         "output_cost_per_million_tokens_usd",
     }
@@ -203,6 +211,16 @@ def _model_providers(value: Any) -> List[ModelProviderConfig]:
                     item.get("output_cost_per_million_tokens_usd", 0.0),
                     "output_cost_per_million_tokens_usd",
                 ),
+                tokens_per_minute=_optional_positive_integer(
+                    item.get("tokens_per_minute"), "tokens_per_minute"
+                ),
+                max_concurrent_requests=_optional_positive_integer(
+                    item.get("max_concurrent_requests"), "max_concurrent_requests"
+                ),
+                concurrency_lease_seconds=_positive_number(
+                    item.get("concurrency_lease_seconds", 60.0),
+                    "concurrency_lease_seconds",
+                ),
             )
         )
     return output
@@ -212,6 +230,8 @@ def _embedding_providers(value: Any) -> List[EmbeddingProviderConfig]:
     allowed = {
         "provider_id", "base_url", "model", "dimension", "credential_env", "batch_size",
         "requests_per_minute", "max_rate_limit_wait_seconds",
+        "tokens_per_minute", "max_concurrent_requests", "concurrency_lease_seconds",
+        "estimated_tokens_per_input",
     }
     items = _provider_objects(value, "embedding_providers", allowed)
     return [
@@ -228,6 +248,20 @@ def _embedding_providers(value: Any) -> List[EmbeddingProviderConfig]:
             max_rate_limit_wait_seconds=_non_negative_number(
                 item.get("max_rate_limit_wait_seconds", 30.0),
                 "max_rate_limit_wait_seconds",
+            ),
+            tokens_per_minute=_optional_positive_integer(
+                item.get("tokens_per_minute"), "tokens_per_minute"
+            ),
+            max_concurrent_requests=_optional_positive_integer(
+                item.get("max_concurrent_requests"), "max_concurrent_requests"
+            ),
+            concurrency_lease_seconds=_positive_number(
+                item.get("concurrency_lease_seconds", 60.0),
+                "concurrency_lease_seconds",
+            ),
+            estimated_tokens_per_input=_positive_integer(
+                item.get("estimated_tokens_per_input", 256),
+                "estimated_tokens_per_input",
             ),
         )
         for item in items
@@ -290,6 +324,12 @@ def _positive_integer(value: Any, name: str) -> int:
     return value
 
 
+def _optional_positive_integer(value: Any, name: str) -> Optional[int]:
+    if value is None:
+        return None
+    return _positive_integer(value, name)
+
+
 def _non_negative_integer(value: Any, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ConfigurationError("%s must be a non-negative integer" % name)
@@ -305,6 +345,13 @@ def _non_negative_number(value: Any, name: str) -> float:
     ):
         raise ConfigurationError("%s must be a non-negative number" % name)
     return float(value)
+
+
+def _positive_number(value: Any, name: str) -> float:
+    number = _non_negative_number(value, name)
+    if number == 0:
+        raise ConfigurationError("%s must be a positive number" % name)
+    return number
 
 
 def _choice(value: Any, name: str, choices: set) -> str:

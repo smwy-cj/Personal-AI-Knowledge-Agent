@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from contextlib import contextmanager
 from unittest.mock import patch
 
 from personal_ai_agent.config import EmbeddingProviderConfig, ModelProviderConfig
@@ -32,6 +33,30 @@ class FakeHttpResponse:
 
 
 class ProviderAdapterTests(unittest.TestCase):
+    class RecordingLimiter:
+        def __init__(self):
+            self.events = []
+
+        def wait_for_capacity(
+            self, provider_id, requests, tokens_per_minute, token_count, max_wait,
+            cancellation_token=None,
+        ):
+            self.events.append(
+                ("quota", provider_id, requests, tokens_per_minute, token_count)
+            )
+            return 0.0
+
+        @contextmanager
+        def concurrency_slot(
+            self, provider_id, maximum, max_wait, lease_seconds,
+            cancellation_token=None,
+        ):
+            self.events.append(("enter", provider_id, maximum))
+            try:
+                yield
+            finally:
+                self.events.append(("exit", provider_id, maximum))
+
     def test_model_adapter_reads_credential_at_call_time(self):
         config = ModelProviderConfig(
             "model-test",
@@ -90,6 +115,36 @@ class ProviderAdapterTests(unittest.TestCase):
             )
         self.assertIn("MODEL_MISSING_CREDENTIAL", str(raised.exception))
 
+    def test_model_adapter_reserves_estimated_tokens_and_concurrency(self):
+        config = ModelProviderConfig(
+            "model-test", "http://127.0.0.1:9000/v1", "model-v1", None,
+            frozenset({"structured_output"}), 8192, "medium", "personal",
+            tokens_per_minute=6000, max_concurrent_requests=2,
+        )
+        limiter = self.RecordingLimiter()
+        document = {
+            "choices": [{"message": {"content": {"value": "ok"}}}],
+            "usage": {},
+        }
+        with patch(
+            "personal_ai_agent.provider_adapters._post_json", return_value=document
+        ):
+            OpenAICompatibleModelProvider(config, limiter).generate(
+                ModelRequest(
+                    "test", "v1", {}, estimated_input_tokens=300,
+                    max_output_tokens=200,
+                )
+            )
+
+        self.assertEqual(
+            limiter.events,
+            [
+                ("quota", "model-test", 60, 6000, 500),
+                ("enter", "model-test", 2),
+                ("exit", "model-test", 2),
+            ],
+        )
+
     def test_embedding_adapter_preserves_provider_order(self):
         config = EmbeddingProviderConfig(
             "embed-test", "http://127.0.0.1:9000/v1", "embed-v1", 2, None
@@ -134,6 +189,36 @@ class ProviderAdapterTests(unittest.TestCase):
 
         self.assertEqual(batch_sizes, [5, 2, 3, 1, 2])
         self.assertEqual([vector[0] for vector in vectors], [1, 2, 3, 4, 5])
+
+    def test_embedding_split_accounts_for_tokens_and_releases_each_slot(self):
+        config = EmbeddingProviderConfig(
+            "embed-test", "http://127.0.0.1:9000/v1", "embed-v1", 2, None,
+            tokens_per_minute=10000, max_concurrent_requests=1,
+            estimated_tokens_per_input=10,
+        )
+        limiter = self.RecordingLimiter()
+
+        def fake_post(url, payload, credential_env, timeout_seconds):
+            texts = payload["input"]
+            if len(texts) > 1:
+                raise ProviderPayloadTooLarge("too large")
+            return {"data": [{"index": 0, "embedding": [1.0, 0.0]}]}
+
+        with patch("personal_ai_agent.provider_adapters._post_json", fake_post):
+            OpenAICompatibleEmbeddingProvider(config, limiter).embed(["a", "b"])
+
+        self.assertEqual(
+            [event for event in limiter.events if event[0] == "quota"],
+            [
+                ("quota", "embed-test", 60, 10000, 20),
+                ("quota", "embed-test", 60, 10000, 10),
+                ("quota", "embed-test", 60, 10000, 10),
+            ],
+        )
+        self.assertEqual(
+            [event[0] for event in limiter.events if event[0] in {"enter", "exit"}],
+            ["enter", "exit", "enter", "exit", "enter", "exit"],
+        )
 
     def test_single_embedding_payload_too_large_terminates(self):
         config = EmbeddingProviderConfig(
