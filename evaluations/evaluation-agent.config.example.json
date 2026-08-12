@@ -1,0 +1,6 @@
+{
+  "vault_path": "fixtures/vault",
+  "data_directory": "../data/evaluation-example",
+  "managed_memory_directory": "Agent/Memory",
+  "observability_retention_days": 30
+}

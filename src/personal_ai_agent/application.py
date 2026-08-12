@@ -36,6 +36,11 @@ from .provider_adapters import (
     OpenAICompatibleModelProvider,
 )
 from .rate_limiter import SQLiteProviderRateLimiter
+from .quality_baseline import (
+    observability_baseline_scope,
+    resolve_quality_baseline,
+    retrieval_baseline_scope,
+)
 from .quality_evaluation import (
     MemoryGovernanceEvaluationDataset,
     ResearchSummaryEvaluationDataset,
@@ -320,10 +325,20 @@ class ApplicationService:
         limit: int = 1000,
         minimums: Optional[Dict[str, float]] = None,
         maximums: Optional[Dict[str, float]] = None,
+        baseline_path: Optional[str] = None,
     ) -> Dict[str, object]:
-        return apply_observability_gates(
-            self.event_store.aggregate(limit), minimums or {}, maximums or {}
+        resolved_minimums, resolved_maximums, baseline = resolve_quality_baseline(
+            baseline_path,
+            observability_baseline_scope(limit),
+            minimums or {},
+            maximums or {},
         )
+        output = apply_observability_gates(
+            self.event_store.aggregate(limit), resolved_minimums, resolved_maximums
+        )
+        if baseline is not None:
+            output["quality_baseline"] = baseline
+        return output
 
     def prune_observability_events(
         self, retention_days: Optional[int] = None, apply: bool = False
@@ -343,8 +358,15 @@ class ApplicationService:
         limit: int = 10,
         minimums: Optional[Dict[str, float]] = None,
         maximums: Optional[Dict[str, float]] = None,
+        baseline_path: Optional[str] = None,
     ) -> Dict[str, object]:
         dataset = RetrievalEvaluationDataset.load(dataset_path)
+        resolved_minimums, resolved_maximums, baseline = resolve_quality_baseline(
+            baseline_path,
+            retrieval_baseline_scope(dataset.name, engine, limit, provider_id),
+            minimums or {},
+            maximums or {},
+        )
         if engine == "keyword":
             search = lambda query, size: self.search(query, size)
         elif engine == "hybrid":
@@ -355,8 +377,10 @@ class ApplicationService:
             raise ValueError("evaluation engine must be keyword or hybrid")
         report = evaluate_retrieval(dataset, search, engine, limit)
         output = apply_retrieval_gates(
-            report.as_dict(), minimums or {}, maximums or {}
+            report.as_dict(), resolved_minimums, resolved_maximums
         )
+        if baseline is not None:
+            output["quality_baseline"] = baseline
         record_event_safely(
             self.event_store,
             "evaluation_completed",

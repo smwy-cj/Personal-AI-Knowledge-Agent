@@ -309,6 +309,8 @@ Provider 可靠性边界：
 python -m personal_ai_agent --config agent.config.json eval-retrieval evaluations/retrieval.example.json --limit 10
 python -m personal_ai_agent --config agent.config.json eval-retrieval evaluations/retrieval.example.json --engine hybrid --provider primary-embedding --limit 10
 python -m personal_ai_agent --config agent.config.json eval-retrieval evaluations/retrieval.example.json --minimum recall_at_k=0.9 --maximum p95_latency_ms=250
+python -m personal_ai_agent --config evaluations/evaluation-agent.config.example.json sync
+python -m personal_ai_agent --config evaluations/evaluation-agent.config.example.json eval-retrieval evaluations/retrieval.example.json --baseline evaluations/baselines/retrieval.keyword.example.json
 ```
 
 报告输出 `Recall@K`、`Hit Rate@K`、`MRR@K`、P50/P95 查询延迟及逐 Case 的命中计数和倒数排名。报告不回显查询和检索正文；数据集本身仍包含查询，应该只提交经过审查、无敏感信息的固定评测语料。
@@ -344,6 +346,12 @@ Research 报告衡量结构有效率、段落引用覆盖率、引用集合精�
 
 `eval-retrieval` 的上限指标白名单是 `p50_latency_ms` / `p95_latency_ms`。`observability-summary` 支持 `task_success_rate` 下限，以及步骤/模型 P50/P95 延迟、`estimated_cost_microusd` / `estimated_cost_usd` 上限。错误方向、未知指标、负数、NaN 或 Infinity 会作为配置错误返回退出码 `2`，不会被静默忽略。
 
+### 版本化质量基线
+
+`--baseline` 接收 `quality_baseline_v1` JSON 策略。检索策略绑定数据集名称、检索引擎、K 值和 Embedding Provider；观测策略绑定最近事件窗口大小。作用域不一致时命令拒绝执行，防止把同一组阈值误用到不同评测条件。命令行 `--minimum` / `--maximum` 会覆盖基线中的同名指标，最终报告记录策略名称、作用域和生效阈值，但不记录本地策略文件路径。
+
+仓库提供三篇无个人信息的固定知识笔记、三条检索查询和一个关键词基线。`scripts/verify.py` 会在临时目录从零同步这些笔记并执行基线评测，因此本地与 CI 都能验证数据集、配置、摄取、检索和门禁的完整链路。示例阈值只用于固定小语料的工程回归，不代表真实个人 Vault 或云端 Provider 的生产目标。
+
 完整路线见 [实施计划](docs/IMPLEMENTATION_PLAN.md)。
 
 ## 本地验证
@@ -354,4 +362,4 @@ Research 报告衡量结构有效率、段落引用覆盖率、引用集合精�
 python scripts/verify.py
 ```
 
-该入口统一执行全部单元/集成测试、源码编译检查和 CLI 冒烟检查。GitHub Actions 会在 Python 3.9、3.11、3.13 以及 Windows/Linux 环境中重复执行，并额外验证安装后的 `personal-ai-agent` 命令。
+该入口统一执行全部单元/集成测试、源码编译检查、CLI 冒烟检查和脱敏固定语料的端到端检索基线。GitHub Actions 会在 Python 3.9、3.11、3.13 以及 Windows/Linux 环境中重复执行，并额外验证安装后的 `personal-ai-agent` 命令。

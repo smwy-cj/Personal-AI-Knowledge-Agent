@@ -430,6 +430,53 @@ class ApplicationCliTests(unittest.TestCase):
         self.assertEqual(report["p95_latency_ms"], 125)
         self.assertEqual(report["failed_gates"], ["p95_latency_ms"])
 
+        baseline = self.root / "retrieval-baseline.json"
+        baseline.write_text(
+            json.dumps(
+                {
+                    "schema": "quality_baseline_v1",
+                    "name": "cli-retrieval-v1",
+                    "scope": {
+                        "evaluation_type": "retrieval",
+                        "dataset_name": "cli-baseline",
+                        "engine": "keyword",
+                        "limit": 3,
+                        "provider_id": None,
+                    },
+                    "minimums": {"recall_at_k": 0.5},
+                    "maximums": {"p95_latency_ms": 500},
+                }
+            ),
+            encoding="utf-8",
+        )
+        code, output, errors = self.invoke(
+            "eval-retrieval",
+            str(dataset),
+            "--limit",
+            "3",
+            "--baseline",
+            str(baseline),
+            "--minimum",
+            "recall_at_k=1",
+        )
+        self.assertEqual((code, errors), (0, ""))
+        report = json.loads(output)
+        self.assertEqual(report["quality_baseline"]["name"], "cli-retrieval-v1")
+        self.assertEqual(report["gate_thresholds"]["minimums"]["recall_at_k"], 1)
+        self.assertNotIn(str(baseline), output)
+
+        code, output, errors = self.invoke(
+            "eval-retrieval",
+            str(dataset),
+            "--limit",
+            "5",
+            "--baseline",
+            str(baseline),
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(output, "")
+        self.assertIn("scope does not match", errors)
+
     def test_cli_observability_summary_applies_success_latency_and_cost_gates(self):
         service = ApplicationService.from_file(str(self.config_path))
         service.event_store.record(
@@ -477,6 +524,30 @@ class ApplicationCliTests(unittest.TestCase):
             "estimated_cost_microusd",
         ])
         self.assertNotIn("task-complete", output)
+
+        baseline = self.root / "observability-baseline.json"
+        baseline.write_text(
+            json.dumps(
+                {
+                    "schema": "quality_baseline_v1",
+                    "name": "cli-operations-v1",
+                    "scope": {
+                        "evaluation_type": "observability",
+                        "event_limit": 1000,
+                    },
+                    "minimums": {"task_success_rate": 1},
+                    "maximums": {"estimated_cost_microusd": 100},
+                }
+            ),
+            encoding="utf-8",
+        )
+        code, output, errors = self.invoke(
+            "observability-summary", "--baseline", str(baseline)
+        )
+        self.assertEqual((code, errors), (0, ""))
+        report = json.loads(output)
+        self.assertEqual(report["quality_baseline"]["name"], "cli-operations-v1")
+        self.assertNotIn(str(baseline), output)
 
         code, output, errors = self.invoke(
             "observability-summary", "--maximum", "task_success_rate=1"

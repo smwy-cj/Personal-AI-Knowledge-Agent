@@ -6,6 +6,16 @@
       "case_id": "example-architecture",
       "query": "agent architecture checkpoint recovery",
       "expected_paths": ["Architecture.md"]
+    },
+    {
+      "case_id": "example-research-citations",
+      "query": "citation verification source drift evidence pack",
+      "expected_paths": ["Research.md"]
+    },
+    {
+      "case_id": "example-memory-approval",
+      "query": "semantic memory human approval controlled paths",
+      "expected_paths": ["Memory.md"]
     }
   ]
 }

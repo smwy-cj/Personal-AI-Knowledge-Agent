@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import compileall
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -42,7 +44,56 @@ def main() -> int:
         env=environment,
         check=False,
     )
-    return smoke.returncode
+    if smoke.returncode != 0:
+        return smoke.returncode
+
+    with tempfile.TemporaryDirectory() as temporary:
+        fixture_root = Path(temporary)
+        fixture_vault = fixture_root / "vault"
+        shutil.copytree(PROJECT_ROOT / "evaluations" / "fixtures" / "vault", fixture_vault)
+        config_path = fixture_root / "agent.config.json"
+        config_path.write_text(
+            '{"vault_path":"vault","data_directory":"data",'
+            '"managed_memory_directory":"Agent/Memory"}',
+            encoding="utf-8",
+        )
+        sync = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "personal_ai_agent",
+                "--config",
+                str(config_path),
+                "sync",
+            ],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            check=False,
+        )
+        if sync.returncode != 0:
+            return sync.returncode
+        evaluation = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "personal_ai_agent",
+                "--config",
+                str(config_path),
+                "eval-retrieval",
+                str(PROJECT_ROOT / "evaluations" / "retrieval.example.json"),
+                "--baseline",
+                str(
+                    PROJECT_ROOT
+                    / "evaluations"
+                    / "baselines"
+                    / "retrieval.keyword.example.json"
+                ),
+            ],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            check=False,
+        )
+        return evaluation.returncode
 
 
 if __name__ == "__main__":

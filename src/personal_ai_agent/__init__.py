@@ -50,6 +50,7 @@ from .provider_adapters import (
     ProviderProtocolError,
 )
 from .rate_limiter import ProviderRateLimitExceeded, SQLiteProviderRateLimiter
+from .quality_baseline import QualityBaselinePolicy
 from .quality_evaluation import (
     MemoryGovernanceEvaluationDataset,
     ResearchSummaryEvaluationDataset,
@@ -99,6 +100,7 @@ __all__ = [
     "ProviderPayloadTooLarge",
     "ProviderProtocolError",
     "ProviderRateLimitExceeded",
+    "QualityBaselinePolicy",
     "OperationCancelled",
     "SQLiteExecutionControl",
     "SQLiteEventStore",
