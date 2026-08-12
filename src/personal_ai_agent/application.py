@@ -336,6 +336,7 @@ class ApplicationService:
         output = apply_observability_gates(
             self.event_store.aggregate(limit), resolved_minimums, resolved_maximums
         )
+        output["evaluation_scope"] = observability_baseline_scope(limit)
         if baseline is not None:
             output["quality_baseline"] = baseline
         return output
@@ -378,6 +379,9 @@ class ApplicationService:
         report = evaluate_retrieval(dataset, search, engine, limit)
         output = apply_retrieval_gates(
             report.as_dict(), resolved_minimums, resolved_maximums
+        )
+        output["evaluation_scope"] = retrieval_baseline_scope(
+            dataset.name, engine, limit, provider_id
         )
         if baseline is not None:
             output["quality_baseline"] = baseline

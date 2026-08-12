@@ -30,6 +30,10 @@ class QualityBaselinePolicy:
             document = json.loads(Path(path).read_text(encoding="utf-8-sig"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise ValueError("quality baseline must be valid UTF-8 JSON") from exc
+        return cls.from_document(document)
+
+    @classmethod
+    def from_document(cls, document: Any) -> "QualityBaselinePolicy":
         if not isinstance(document, dict) or document.get("schema") != QUALITY_BASELINE_SCHEMA:
             raise ValueError("unsupported quality baseline schema")
         if set(document) != {"schema", "name", "scope", "minimums", "maximums"}:
@@ -37,7 +41,7 @@ class QualityBaselinePolicy:
         name = document["name"]
         if not _safe_identifier(name):
             raise ValueError("quality baseline name must be a safe identifier")
-        scope = _validated_scope(document["scope"])
+        scope = validate_quality_baseline_scope(document["scope"])
         minimums = _thresholds(document["minimums"], "minimum")
         maximums = _thresholds(document["maximums"], "maximum")
         allowed_minimums, allowed_maximums = _allowed_metrics(scope["evaluation_type"])
@@ -103,7 +107,7 @@ def resolve_quality_baseline(
     return resolved_minimums, resolved_maximums, policy.metadata()
 
 
-def _validated_scope(value: Any) -> Dict[str, object]:
+def validate_quality_baseline_scope(value: Any) -> Dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError("quality baseline scope must be an object")
     evaluation_type = value.get("evaluation_type")

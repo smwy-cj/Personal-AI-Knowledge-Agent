@@ -352,6 +352,20 @@ Research 报告衡量结构有效率、段落引用覆盖率、引用集合精�
 
 仓库提供三篇无个人信息的固定知识笔记、三条检索查询和一个关键词基线。`scripts/verify.py` 会在临时目录从零同步这些笔记并执行基线评测，因此本地与 CI 都能验证数据集、配置、摄取、检索和门禁的完整链路。示例阈值只用于固定小语料的工程回归，不代表真实个人 Vault 或云端 Provider 的生产目标。
 
+### 候选基线与历史对比
+
+检索评测和观测汇总报告现在都包含完整的 `evaluation_scope`，用于证明两次结果是在相同数据集、引擎、K、Provider 或事件窗口下产生。报告可保存后交给两个不依赖 Agent 配置的离线命令：
+
+```powershell
+python -m personal_ai_agent baseline-candidate reports/retrieval-current.json --name retrieval-candidate-v2
+python -m personal_ai_agent baseline-candidate reports/operations-current.json --name operations-candidate-v2 --minimum-retention 0.99 --maximum-headroom 1.1
+python -m personal_ai_agent baseline-compare reports/retrieval-reference.json reports/retrieval-current.json
+```
+
+`baseline-candidate` 默认把越高越好的实际指标乘以 `0.98`，把越低越好的延迟/成本指标乘以 `1.20`。输出固定为 `quality_baseline_candidate_v1` 和 `pending_review`，同时记录生成参数、观察值与规范化报告 SHA-256；它不会覆盖现有基线，也不能未经人工审查直接作为 `--baseline` 使用。审查者需要确认数据代表性、零值或小样本造成的过严阈值，并从 `proposed_policy` 提取正式策略。
+
+`baseline-compare` 只接受 Schema 和评测作用域完全一致的报告。它逐指标输出参考值、当前值、绝对/相对变化及 `improved`、`degraded`、`unchanged` 判断；存在任一退化时仍输出完整比较报告，但返回退出码 `3`，可直接用于 CI。候选和比较结果不复制逐 Case 内容、本地报告路径或用户正文，只保存报告指纹。
+
 完整路线见 [实施计划](docs/IMPLEMENTATION_PLAN.md)。
 
 ## 本地验证
@@ -362,4 +376,4 @@ Research 报告衡量结构有效率、段落引用覆盖率、引用集合精�
 python scripts/verify.py
 ```
 
-该入口统一执行全部单元/集成测试、源码编译检查、CLI 冒烟检查和脱敏固定语料的端到端检索基线。GitHub Actions 会在 Python 3.9、3.11、3.13 以及 Windows/Linux 环境中重复执行，并额外验证安装后的 `personal-ai-agent` 命令。
+该入口统一执行全部单元/集成测试、源码编译检查、CLI 冒烟检查、脱敏固定语料的端到端检索基线、候选基线生成与无退化历史比较。GitHub Actions 会在 Python 3.9、3.11、3.13 以及 Windows/Linux 环境中重复执行，并额外验证安装后的 `personal-ai-agent` 命令。

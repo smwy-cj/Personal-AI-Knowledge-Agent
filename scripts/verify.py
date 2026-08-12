@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import compileall
+import json
 import os
 import shutil
 import subprocess
@@ -92,8 +93,61 @@ def main() -> int:
             cwd=PROJECT_ROOT,
             env=environment,
             check=False,
+            capture_output=True,
+            text=True,
         )
-        return evaluation.returncode
+        if evaluation.returncode != 0:
+            sys.stdout.write(evaluation.stdout)
+            sys.stderr.write(evaluation.stderr)
+            return evaluation.returncode
+        report = json.loads(evaluation.stdout)
+        report_path = fixture_root / "retrieval-report.json"
+        report_path.write_text(
+            json.dumps(report, ensure_ascii=False, sort_keys=True), encoding="utf-8"
+        )
+        candidate = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "personal_ai_agent",
+                "baseline-candidate",
+                str(report_path),
+                "--name",
+                "example-keyword-retrieval-candidate-v2",
+            ],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if candidate.returncode != 0:
+            sys.stdout.write(candidate.stdout)
+            sys.stderr.write(candidate.stderr)
+            return candidate.returncode
+        if json.loads(candidate.stdout).get("status") != "pending_review":
+            return 1
+        comparison = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "personal_ai_agent",
+                "baseline-compare",
+                str(report_path),
+                str(report_path),
+            ],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if comparison.returncode != 0:
+            sys.stdout.write(comparison.stdout)
+            sys.stderr.write(comparison.stderr)
+            return comparison.returncode
+        comparison_report = json.loads(comparison.stdout)
+        return 0 if not comparison_report["summary"]["regression_detected"] else 1
 
 
 if __name__ == "__main__":

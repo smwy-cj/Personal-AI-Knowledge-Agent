@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 
 from .application import ApplicationService
-from .config import ApplicationConfig, ConfigurationError
+from .config import ConfigurationError
+from .quality_history import (
+    compare_quality_reports,
+    generate_quality_baseline_candidate,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -81,6 +85,18 @@ def build_parser() -> argparse.ArgumentParser:
     summary.add_argument("--minimum", action="append", default=[])
     summary.add_argument("--maximum", action="append", default=[])
     summary.add_argument("--baseline")
+    candidate = subcommands.add_parser(
+        "baseline-candidate", help="Generate a pending quality baseline from a report"
+    )
+    candidate.add_argument("report")
+    candidate.add_argument("--name", required=True)
+    candidate.add_argument("--minimum-retention", type=float, default=0.98)
+    candidate.add_argument("--maximum-headroom", type=float, default=1.20)
+    comparison = subcommands.add_parser(
+        "baseline-compare", help="Compare two scope-compatible quality reports"
+    )
+    comparison.add_argument("reference_report")
+    comparison.add_argument("current_report")
     prune = subcommands.add_parser(
         "events-prune", help="Preview or explicitly apply observability retention"
     )
@@ -93,89 +109,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
     try:
-        service = ApplicationService.from_file(arguments.config)
-        if arguments.command == "config-validate":
-            result = service.validate()
-        elif arguments.command == "sync":
-            result = service.sync_vault()
-        elif arguments.command == "search":
-            result = service.search(
-                arguments.query,
-                arguments.limit,
-                arguments.path_prefix,
-                arguments.tag,
+        if arguments.command == "baseline-candidate":
+            result = generate_quality_baseline_candidate(
+                arguments.report,
+                arguments.name,
+                arguments.minimum_retention,
+                arguments.maximum_headroom,
             )
-        elif arguments.command == "vector-sync":
-            result = service.vector_sync(arguments.provider)
-        elif arguments.command == "hybrid-search":
-            result = service.hybrid_search(
-                arguments.query,
-                arguments.provider,
-                arguments.limit,
-                arguments.path_prefix,
-                arguments.tag,
-                arguments.keyword_weight,
-                arguments.vector_weight,
-            )
-        elif arguments.command == "research-run":
-            result = service.run_research(
-                arguments.goal,
-                arguments.thread_id,
-                arguments.model_provider,
-                arguments.embedding_provider,
-                arguments.limit,
-                arguments.language,
-            )
-        elif arguments.command == "task-show":
-            result = service.show_task(arguments.task_id)
-        elif arguments.command == "task-cancel":
-            result = service.cancel_task(arguments.task_id)
-        elif arguments.command == "task-events":
-            result = service.task_events(arguments.task_id, arguments.limit)
-        elif arguments.command == "task-list":
-            result = service.list_thread_tasks(arguments.thread_id, arguments.limit)
-        elif arguments.command == "memory-pending":
-            result = service.pending_memory_candidates(arguments.task_id)
-        elif arguments.command == "memory-resolve":
-            result = service.resolve_memory(
-                arguments.task_id, arguments.approve, arguments.reject
-            )
-        elif arguments.command == "memory-list":
-            result = service.list_memories()
-        elif arguments.command == "eval-retrieval":
-            result = service.evaluate_retrieval(
-                arguments.dataset,
-                arguments.engine,
-                arguments.provider,
-                arguments.limit,
-                _minimums(arguments.minimum),
-                _maximums(arguments.maximum),
-                arguments.baseline,
-            )
-        elif arguments.command == "eval-research":
-            result = service.evaluate_research_summaries(
-                arguments.dataset, _minimums(arguments.minimum)
-            )
-        elif arguments.command == "eval-memory":
-            result = service.evaluate_memory_governance(
-                arguments.dataset, _minimums(arguments.minimum)
-            )
-        elif arguments.command == "observability-summary":
-            result = service.observability_summary(
-                arguments.limit,
-                _minimums(arguments.minimum),
-                _maximums(arguments.maximum),
-                arguments.baseline,
-            )
-        elif arguments.command == "events-prune":
-            result = service.prune_observability_events(
-                arguments.older_than_days, arguments.apply
+        elif arguments.command == "baseline-compare":
+            result = compare_quality_reports(
+                arguments.reference_report, arguments.current_report
             )
         else:
-            parser.error("unknown command")
-            return 2
+            service = ApplicationService.from_file(arguments.config)
+            result = _run_service_command(service, arguments, parser)
         print(json.dumps(_jsonable(result), ensure_ascii=False, indent=2, sort_keys=True))
-        return 3 if isinstance(result, dict) and result.get("gate_passed") is False else 0
+        return _result_exit_code(result)
     except (ConfigurationError, ValueError, KeyError, OSError) as exc:
         print(
             json.dumps(
@@ -186,6 +135,101 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             file=sys.stderr,
         )
         return 2
+
+
+def _run_service_command(service, arguments, parser):
+    if arguments.command == "config-validate":
+        result = service.validate()
+    elif arguments.command == "sync":
+        result = service.sync_vault()
+    elif arguments.command == "search":
+        result = service.search(
+            arguments.query,
+            arguments.limit,
+            arguments.path_prefix,
+            arguments.tag,
+        )
+    elif arguments.command == "vector-sync":
+        result = service.vector_sync(arguments.provider)
+    elif arguments.command == "hybrid-search":
+        result = service.hybrid_search(
+            arguments.query,
+            arguments.provider,
+            arguments.limit,
+            arguments.path_prefix,
+            arguments.tag,
+            arguments.keyword_weight,
+            arguments.vector_weight,
+        )
+    elif arguments.command == "research-run":
+        result = service.run_research(
+            arguments.goal,
+            arguments.thread_id,
+            arguments.model_provider,
+            arguments.embedding_provider,
+            arguments.limit,
+            arguments.language,
+        )
+    elif arguments.command == "task-show":
+        result = service.show_task(arguments.task_id)
+    elif arguments.command == "task-cancel":
+        result = service.cancel_task(arguments.task_id)
+    elif arguments.command == "task-events":
+        result = service.task_events(arguments.task_id, arguments.limit)
+    elif arguments.command == "task-list":
+        result = service.list_thread_tasks(arguments.thread_id, arguments.limit)
+    elif arguments.command == "memory-pending":
+        result = service.pending_memory_candidates(arguments.task_id)
+    elif arguments.command == "memory-resolve":
+        result = service.resolve_memory(
+            arguments.task_id, arguments.approve, arguments.reject
+        )
+    elif arguments.command == "memory-list":
+        result = service.list_memories()
+    elif arguments.command == "eval-retrieval":
+        result = service.evaluate_retrieval(
+            arguments.dataset,
+            arguments.engine,
+            arguments.provider,
+            arguments.limit,
+            _minimums(arguments.minimum),
+            _maximums(arguments.maximum),
+            arguments.baseline,
+        )
+    elif arguments.command == "eval-research":
+        result = service.evaluate_research_summaries(
+            arguments.dataset, _minimums(arguments.minimum)
+        )
+    elif arguments.command == "eval-memory":
+        result = service.evaluate_memory_governance(
+            arguments.dataset, _minimums(arguments.minimum)
+        )
+    elif arguments.command == "observability-summary":
+        result = service.observability_summary(
+            arguments.limit,
+            _minimums(arguments.minimum),
+            _maximums(arguments.maximum),
+            arguments.baseline,
+        )
+    elif arguments.command == "events-prune":
+        result = service.prune_observability_events(
+            arguments.older_than_days, arguments.apply
+        )
+    else:
+        parser.error("unknown command")
+        return 2
+    return result
+
+
+def _result_exit_code(result: Any) -> int:
+    if not isinstance(result, dict):
+        return 0
+    if result.get("gate_passed") is False:
+        return 3
+    summary = result.get("summary")
+    if isinstance(summary, dict) and summary.get("regression_detected") is True:
+        return 3
+    return 0
 
 
 def _jsonable(value: Any) -> Any:

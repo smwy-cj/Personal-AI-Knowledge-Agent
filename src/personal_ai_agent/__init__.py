@@ -51,6 +51,10 @@ from .provider_adapters import (
 )
 from .rate_limiter import ProviderRateLimitExceeded, SQLiteProviderRateLimiter
 from .quality_baseline import QualityBaselinePolicy
+from .quality_history import (
+    compare_quality_reports,
+    generate_quality_baseline_candidate,
+)
 from .quality_evaluation import (
     MemoryGovernanceEvaluationDataset,
     ResearchSummaryEvaluationDataset,
@@ -101,6 +105,8 @@ __all__ = [
     "ProviderProtocolError",
     "ProviderRateLimitExceeded",
     "QualityBaselinePolicy",
+    "compare_quality_reports",
+    "generate_quality_baseline_candidate",
     "OperationCancelled",
     "SQLiteExecutionControl",
     "SQLiteEventStore",
