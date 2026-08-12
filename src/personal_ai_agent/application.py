@@ -79,7 +79,8 @@ class ApplicationService:
             config.data_directory / "observability.sqlite3"
         )
         self.rate_limiter = SQLiteProviderRateLimiter(
-            config.data_directory / "rate_limits.sqlite3"
+            config.data_directory / "rate_limits.sqlite3",
+            event_store=self.event_store,
         )
         self.memory_repository = SQLiteMemoryRepository(
             config.data_directory / "memory.sqlite3"

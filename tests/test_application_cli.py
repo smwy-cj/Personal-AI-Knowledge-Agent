@@ -505,6 +505,14 @@ class ApplicationCliTests(unittest.TestCase):
                 "estimated_cost_microusd": 54,
             },
         )
+        service.event_store.record(
+            "provider_quota_waited",
+            attributes={
+                "provider_id": "provider",
+                "quota_kind": "capacity",
+                "wait_ms": 125,
+            },
+        )
 
         code, output, errors = self.invoke(
             "observability-summary",
@@ -514,6 +522,8 @@ class ApplicationCliTests(unittest.TestCase):
             "model_p95_latency_ms=50",
             "--maximum",
             "estimated_cost_microusd=53",
+            "--maximum",
+            "provider_quota_p95_wait_ms=100",
         )
 
         self.assertEqual((code, errors), (3, ""))
@@ -522,6 +532,7 @@ class ApplicationCliTests(unittest.TestCase):
         self.assertEqual(report["failed_gates"], [
             "model_p95_latency_ms",
             "estimated_cost_microusd",
+            "provider_quota_p95_wait_ms",
         ])
         self.assertNotIn("task-complete", output)
 

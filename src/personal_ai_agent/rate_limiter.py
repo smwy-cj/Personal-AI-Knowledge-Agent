@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Callable, Iterator, Optional, Union
 
 from .cancellation import CancellationToken, check_cancelled
+from .observability import SQLiteEventStore, record_event_safely
 
 
 class ProviderRateLimitExceeded(ValueError):
@@ -30,10 +31,12 @@ class SQLiteProviderRateLimiter:
         database_path: Union[str, Path],
         clock: Callable[[], float] = time.time,
         sleeper: Callable[[float], None] = time.sleep,
+        event_store: Optional[SQLiteEventStore] = None,
     ) -> None:
         self.database_path = str(database_path)
         self.clock = clock
         self.sleeper = sleeper
+        self.event_store = event_store
         Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
@@ -319,6 +322,7 @@ class SQLiteProviderRateLimiter:
             max_wait_seconds,
         )
         self._wait(reservation.delay, cancellation_token)
+        self._record_wait(provider_id, "capacity", reservation.delay)
         return reservation
 
     def defer_provider(self, provider_id: str, retry_after_seconds: float) -> float:
@@ -352,7 +356,19 @@ class SQLiteProviderRateLimiter:
                 """,
                 (provider_id, blocked_until, now),
             )
-        return max(0.0, blocked_until - now)
+        delay = max(0.0, blocked_until - now)
+        if blocked_until > (
+            row["blocked_until"] if row is not None else now
+        ):
+            record_event_safely(
+                self.event_store,
+                "provider_cooldown_updated",
+                attributes={
+                    "provider_id": provider_id,
+                    "cooldown_ms": _milliseconds(delay),
+                },
+            )
+        return delay
 
     def reconcile_tokens(
         self,
@@ -434,6 +450,17 @@ class SQLiteProviderRateLimiter:
                     reservation.token_reservation_id,
                 ),
             )
+        record_event_safely(
+            self.event_store,
+            "provider_tokens_reconciled",
+            attributes={
+                "provider_id": reservation.provider_id,
+                "estimated_tokens": estimated_tokens,
+                "actual_tokens": actual_tokens,
+                "token_delta": adjustment,
+                "applied_token_adjustment": applied_adjustment,
+            },
+        )
         return applied_adjustment
 
     def reserve_tokens(
@@ -522,6 +549,7 @@ class SQLiteProviderRateLimiter:
             raise ValueError("provider concurrency limit arguments are invalid")
         lease_id = uuid.uuid4().hex if max_concurrent_requests is not None else None
         deadline = self.clock() + max_wait_seconds
+        waited_seconds = 0.0
         while True:
             check_cancelled(cancellation_token)
             now = self.clock()
@@ -589,6 +617,8 @@ class SQLiteProviderRateLimiter:
                 else required_wait
             )
             self._wait(delay, cancellation_token)
+            waited_seconds += delay
+        self._record_wait(provider_id, "admission", waited_seconds)
         try:
             check_cancelled(cancellation_token)
             yield
@@ -602,7 +632,6 @@ class SQLiteProviderRateLimiter:
                         """,
                         (provider_id, lease_id),
                     )
-
     def _wait(
         self,
         delay: float,
@@ -614,3 +643,21 @@ class SQLiteProviderRateLimiter:
             else:
                 self.sleeper(delay)
         check_cancelled(cancellation_token)
+
+    def _record_wait(self, provider_id: str, kind: str, delay: float) -> None:
+        wait_ms = _milliseconds(delay)
+        if wait_ms <= 0:
+            return
+        record_event_safely(
+            self.event_store,
+            "provider_quota_waited",
+            attributes={
+                "provider_id": provider_id,
+                "quota_kind": kind,
+                "wait_ms": wait_ms,
+            },
+        )
+
+
+def _milliseconds(seconds: float) -> int:
+    return max(0, int(round(seconds * 1000)))

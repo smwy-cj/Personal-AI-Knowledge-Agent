@@ -28,6 +28,9 @@ EVENT_TYPES = {
     "model_completed",
     "evaluation_completed",
     "events_pruned",
+    "provider_quota_waited",
+    "provider_cooldown_updated",
+    "provider_tokens_reconciled",
 }
 
 ALLOWED_ATTRIBUTE_KEYS = {
@@ -76,6 +79,13 @@ ALLOWED_ATTRIBUTE_KEYS = {
     "estimated_cost_microusd",
     "retention_days",
     "deleted_count",
+    "quota_kind",
+    "wait_ms",
+    "cooldown_ms",
+    "estimated_tokens",
+    "actual_tokens",
+    "token_delta",
+    "applied_token_adjustment",
 }
 
 FORBIDDEN_KEY_PARTS = {
@@ -229,6 +239,20 @@ class SQLiteEventStore:
             if item.event_type == "model_completed" and "duration_ms" in item.attributes
         ]
         model_events = [item for item in events if item.event_type == "model_completed"]
+        quota_wait_events = [
+            item for item in events if item.event_type == "provider_quota_waited"
+        ]
+        quota_waits = [
+            int(item.attributes.get("wait_ms", 0)) for item in quota_wait_events
+        ]
+        cooldowns = [
+            int(item.attributes.get("cooldown_ms", 0))
+            for item in events
+            if item.event_type == "provider_cooldown_updated"
+        ]
+        token_reconciliations = [
+            item for item in events if item.event_type == "provider_tokens_reconciled"
+        ]
         estimated_cost_microusd = sum(
             int(item.attributes.get("estimated_cost_microusd", 0))
             for item in model_events
@@ -253,6 +277,33 @@ class SQLiteEventStore:
             "step_p95_latency_ms": _percentile(step_durations, 0.95),
             "model_p50_latency_ms": _percentile(model_durations, 0.50),
             "model_p95_latency_ms": _percentile(model_durations, 0.95),
+            "provider_quota_wait_count": len(quota_wait_events),
+            "provider_quota_wait_ms": sum(quota_waits),
+            "provider_quota_p50_wait_ms": _percentile(quota_waits, 0.50),
+            "provider_quota_p95_wait_ms": _percentile(quota_waits, 0.95),
+            "provider_cooldown_count": len(cooldowns),
+            "provider_cooldown_max_ms": max(cooldowns) if cooldowns else 0,
+            "provider_token_reconciliation_count": len(token_reconciliations),
+            "provider_estimated_tokens": sum(
+                int(item.attributes.get("estimated_tokens", 0))
+                for item in token_reconciliations
+            ),
+            "provider_actual_tokens": sum(
+                int(item.attributes.get("actual_tokens", 0))
+                for item in token_reconciliations
+            ),
+            "provider_token_estimate_delta": sum(
+                int(item.attributes.get("token_delta", 0))
+                for item in token_reconciliations
+            ),
+            "provider_token_estimate_absolute_error": sum(
+                abs(int(item.attributes.get("token_delta", 0)))
+                for item in token_reconciliations
+            ),
+            "provider_applied_token_adjustment": sum(
+                int(item.attributes.get("applied_token_adjustment", 0))
+                for item in token_reconciliations
+            ),
         }
 
     def cost_report(
@@ -388,7 +439,7 @@ def record_event_safely(
     try:
         store.record(event_type, task_id, step_id, attributes)
         return True
-    except (OSError, sqlite3.Error):
+    except (OSError, sqlite3.Error, ObservationValidationError):
         return False
 
 def _validate_attributes(attributes: Dict[str, Any]) -> Dict[str, Any]:

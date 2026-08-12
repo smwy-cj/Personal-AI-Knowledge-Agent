@@ -21,7 +21,7 @@ RETRIEVAL_MAXIMUM_METRICS = frozenset(
     {"p50_latency_ms", "p95_latency_ms"}
 )
 OBSERVABILITY_MINIMUM_METRICS = frozenset({"task_success_rate"})
-OBSERVABILITY_MAXIMUM_METRICS = frozenset(
+OBSERVABILITY_LEGACY_MAXIMUM_METRICS = frozenset(
     {
         "estimated_cost_microusd",
         "estimated_cost_usd",
@@ -30,6 +30,16 @@ OBSERVABILITY_MAXIMUM_METRICS = frozenset(
         "model_p50_latency_ms",
         "model_p95_latency_ms",
     }
+)
+OBSERVABILITY_QUOTA_MAXIMUM_METRICS = frozenset(
+    {
+        "provider_quota_p95_wait_ms",
+        "provider_cooldown_count",
+        "provider_token_estimate_absolute_error",
+    }
+)
+OBSERVABILITY_MAXIMUM_METRICS = (
+    OBSERVABILITY_LEGACY_MAXIMUM_METRICS | OBSERVABILITY_QUOTA_MAXIMUM_METRICS
 )
 
 

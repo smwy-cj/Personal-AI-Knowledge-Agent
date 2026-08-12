@@ -47,6 +47,32 @@ class QualityHistoryTests(unittest.TestCase):
         report.update(overrides)
         return report
 
+    def observability_report(self, include_quota=True, **overrides):
+        report = {
+            "schema": "observability_summary_v1",
+            "evaluation_scope": {
+                "evaluation_type": "observability",
+                "event_limit": 1000,
+            },
+            "task_success_rate": 0.9,
+            "estimated_cost_microusd": 1000,
+            "estimated_cost_usd": 0.001,
+            "step_p50_latency_ms": 10,
+            "step_p95_latency_ms": 20,
+            "model_p50_latency_ms": 30,
+            "model_p95_latency_ms": 40,
+        }
+        if include_quota:
+            report.update(
+                {
+                    "provider_quota_p95_wait_ms": 50,
+                    "provider_cooldown_count": 2,
+                    "provider_token_estimate_absolute_error": 10,
+                }
+            )
+        report.update(overrides)
+        return report
+
     def test_generates_pending_candidate_with_review_margins_and_no_path(self):
         source = self.write("private-report.json", self.retrieval_report())
 
@@ -62,20 +88,7 @@ class QualityHistoryTests(unittest.TestCase):
         QualityBaselinePolicy.from_document(candidate["proposed_policy"])
 
     def test_generates_observability_candidate_and_rejects_invalid_parameters(self):
-        report = {
-            "schema": "observability_summary_v1",
-            "evaluation_scope": {
-                "evaluation_type": "observability",
-                "event_limit": 1000,
-            },
-            "task_success_rate": 0.9,
-            "estimated_cost_microusd": 1000,
-            "estimated_cost_usd": 0.001,
-            "step_p50_latency_ms": 10,
-            "step_p95_latency_ms": 20,
-            "model_p50_latency_ms": 30,
-            "model_p95_latency_ms": 40,
-        }
+        report = self.observability_report()
         source = self.write("operations.json", report)
         candidate = generate_quality_baseline_candidate(
             source, "operations-v2", 0.9, 1.5
@@ -86,10 +99,39 @@ class QualityHistoryTests(unittest.TestCase):
         self.assertEqual(
             candidate["proposed_policy"]["maximums"]["model_p95_latency_ms"], 60.0
         )
+        self.assertEqual(
+            candidate["proposed_policy"]["maximums"][
+                "provider_quota_p95_wait_ms"
+            ],
+            75.0,
+        )
         with self.assertRaises(ValueError):
             generate_quality_baseline_candidate(source, "operations-v2", 1.1, 1.5)
         with self.assertRaises(ValueError):
             generate_quality_baseline_candidate(source, "operations-v2", 0.9, 0.9)
+
+    def test_supports_legacy_observability_candidates_but_not_mixed_comparisons(self):
+        legacy = self.write(
+            "legacy-operations.json", self.observability_report(include_quota=False)
+        )
+        current = self.write("current-operations.json", self.observability_report())
+
+        candidate = generate_quality_baseline_candidate(legacy, "legacy-operations")
+
+        self.assertNotIn(
+            "provider_quota_p95_wait_ms",
+            candidate["proposed_policy"]["maximums"],
+        )
+        with self.assertRaisesRegex(ValueError, "same metric sets"):
+            compare_quality_reports(legacy, current)
+
+        incomplete = self.observability_report()
+        del incomplete["provider_cooldown_count"]
+        with self.assertRaisesRegex(ValueError, "quota metrics must be complete"):
+            generate_quality_baseline_candidate(
+                self.write("incomplete-operations.json", incomplete),
+                "incomplete-operations",
+            )
 
     def test_compares_metric_directions_and_reports_regressions(self):
         reference = self.write("reference.json", self.retrieval_report())

@@ -214,15 +214,26 @@ class QualityEvaluationTests(unittest.TestCase):
                 "step_p95_latency_ms": 100,
                 "model_p50_latency_ms": 40,
                 "model_p95_latency_ms": 80,
+                "provider_quota_p95_wait_ms": 120,
+                "provider_cooldown_count": 2,
+                "provider_token_estimate_absolute_error": 15,
             },
             {"task_success_rate": 0.8},
-            {"estimated_cost_microusd": 200, "model_p95_latency_ms": 100},
+            {
+                "estimated_cost_microusd": 200,
+                "model_p95_latency_ms": 100,
+                "provider_quota_p95_wait_ms": 100,
+            },
         )
 
         self.assertFalse(report["gate_passed"])
         self.assertEqual(
             report["failed_gates"],
-            ["task_success_rate", "estimated_cost_microusd"],
+            [
+                "task_success_rate",
+                "estimated_cost_microusd",
+                "provider_quota_p95_wait_ms",
+            ],
         )
 
     def test_directional_gate_whitelists_and_finite_thresholds_are_enforced(self):

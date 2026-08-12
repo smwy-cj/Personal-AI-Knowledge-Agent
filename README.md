@@ -294,7 +294,7 @@ OpenAI-compatible 响应中的 `Retry-After` 会写入共享 Provider 冷却状�
 
 运行事件存放在独立的 `observability.sqlite3`，使用事件类型与字段双白名单。事件可记录状态、执行器、步骤耗时、错误类型、Provider/模型 ID、Prompt 版本、Token 和重试延迟，但不接受用户问题、Prompt 正文、请求 Payload、证据/回答正文或凭据。`task-events` 因此适合排查生命周期和成本，不是完整内容审计日志。
 
-事件写入采用 best-effort：SQLite/I/O 故障不会改变任务业务状态；非法字段或敏感字段仍会被验证层拒绝，以便开发阶段及时发现观测契约违规。
+事件写入采用 best-effort：SQLite/I/O 或观测字段校验故障不会改变任务及 Provider 调用结果；底层 Event Store 仍会拒绝非法或敏感字段，运行时安全记录入口则把这类观测失败隔离在业务流程之外。
 
 检索评测数据集使用 `retrieval_eval_v1`：
 
@@ -327,7 +327,7 @@ python -m personal_ai_agent --config evaluations/evaluation-agent.config.example
 运行聚合：
 
 ```powershell
-python -m personal_ai_agent --config agent.config.json observability-summary --limit 1000 --minimum task_success_rate=0.95 --maximum model_p95_latency_ms=30000 --maximum estimated_cost_usd=1
+python -m personal_ai_agent --config agent.config.json observability-summary --limit 1000 --minimum task_success_rate=0.95 --maximum model_p95_latency_ms=30000 --maximum estimated_cost_usd=1 --maximum provider_quota_p95_wait_ms=5000 --maximum provider_cooldown_count=10 --maximum provider_token_estimate_absolute_error=5000
 python -m personal_ai_agent --config agent.config.json cost-report --from 2026-08-01T00:00:00+08:00 --to 2026-09-01T00:00:00+08:00
 python -m personal_ai_agent --config agent.config.json cost-report --task-id task_xxx --provider primary-model --include-calls
 python -m personal_ai_agent --config agent.config.json billing-reconcile evaluations/billing/provider.example.json
@@ -336,7 +336,7 @@ python -m personal_ai_agent --config agent.config.json events-prune --older-than
 python -m personal_ai_agent --config agent.config.json events-prune --older-than-days 90 --apply
 ```
 
-聚合报告包含最近 N 条脱敏事件窗口内的任务终态分布、成功率、步骤成功/失败数、模型完成/重试数、输入/输出 Token、估算美元成本以及步骤和模型 P50/P95 延迟。它是运行健康视图，不是全历史账单。
+聚合报告包含最近 N 条脱敏事件窗口内的任务终态分布、成功率、步骤成功/失败数、模型完成/重试数、输入/输出 Token、估算美元成本、步骤和模型 P50/P95 延迟，以及 Provider 配额等待次数与 P50/P95、共享冷却次数与最大时长、Token 估算/实际/绝对误差及已应用校正。配额事件只保存 Provider ID、配额种类和数值，不保存预约 ID、冷却截止时间、HTTP 头、请求或响应正文。它是运行健康视图，不是全历史账单。
 
 `cost-report` 基于全部保留期内的 `model_completed` 脱敏事件，支持 `--from`、`--to`、`--task-id` 和 `--provider` 精确过滤，并同时返回总计、按任务和按 Provider 分组。时间必须是带时区的 ISO-8601；窗口采用起始包含、结束不包含语义，输出统一规范化为 UTC。报告区分有成本估算和缺少成本估算的历史调用，后者仍计入调用、Token 和耗时，但不会被冒充成已知零成本。
 
@@ -357,7 +357,7 @@ python -m personal_ai_agent --config agent.config.json eval-research evaluations
 python -m personal_ai_agent --config agent.config.json eval-memory evaluations/memory_governance.example.json --minimum decision_accuracy=1
 ```
 
-准确率和成功率使用重复的 `--minimum metric=value` 下限门禁；检索延迟及观测窗口中的步骤/模型延迟、估算成本使用重复的 `--maximum metric=value` 上限门禁。门禁输出包含实际指标、阈值和失败指标名称：
+准确率和成功率使用重复的 `--minimum metric=value` 下限门禁；检索延迟及观测窗口中的步骤/模型延迟、估算成本、Provider 配额 P95 等待、共享冷却次数和 Token 估算绝对误差使用重复的 `--maximum metric=value` 上限门禁。门禁输出包含实际指标、阈值和失败指标名称：
 
 - 达标返回退出码 `0`；
 - 评测正常但未达标返回 `3`，stdout 仍包含完整 JSON 报告；
@@ -365,7 +365,7 @@ python -m personal_ai_agent --config agent.config.json eval-memory evaluations/m
 
 Research 报告衡量结构有效率、段落引用覆盖率、引用集合精确匹配率及引用 Precision/Recall/F1。它衡量人工引用标签一致性，不自动证明摘要文本被证据蕴含或事实为真。Memory 报告衡量规则治理的状态、原因、审批和整体决策准确率，不等同于真实用户接受率。报告只保留 Case ID 与指标，不输出被评测正文。
 
-`eval-retrieval` 的上限指标白名单是 `p50_latency_ms` / `p95_latency_ms`。`observability-summary` 支持 `task_success_rate` 下限，以及步骤/模型 P50/P95 延迟、`estimated_cost_microusd` / `estimated_cost_usd` 上限。错误方向、未知指标、负数、NaN 或 Infinity 会作为配置错误返回退出码 `2`，不会被静默忽略。
+`eval-retrieval` 的上限指标白名单是 `p50_latency_ms` / `p95_latency_ms`。`observability-summary` 支持 `task_success_rate` 下限，以及步骤/模型 P50/P95 延迟、`estimated_cost_microusd` / `estimated_cost_usd`、`provider_quota_p95_wait_ms`、`provider_cooldown_count`、`provider_token_estimate_absolute_error` 上限。错误方向、未知指标、负数、NaN 或 Infinity 会作为配置错误返回退出码 `2`，不会被静默忽略。
 
 ### 版本化质量基线
 
@@ -385,7 +385,7 @@ python -m personal_ai_agent baseline-compare reports/retrieval-reference.json re
 
 `baseline-candidate` 默认把越高越好的实际指标乘以 `0.98`，把越低越好的延迟/成本指标乘以 `1.20`。输出固定为 `quality_baseline_candidate_v1` 和 `pending_review`，同时记录生成参数、观察值与规范化报告 SHA-256；它不会覆盖现有基线，也不能未经人工审查直接作为 `--baseline` 使用。审查者需要确认数据代表性、零值或小样本造成的过严阈值，并从 `proposed_policy` 提取正式策略。
 
-`baseline-compare` 只接受 Schema 和评测作用域完全一致的报告。它逐指标输出参考值、当前值、绝对/相对变化及 `improved`、`degraded`、`unchanged` 判断；存在任一退化时仍输出完整比较报告，但返回退出码 `3`，可直接用于 CI。候选和比较结果不复制逐 Case 内容、本地报告路径或用户正文，只保存报告指纹。
+`baseline-compare` 只接受 Schema、评测作用域和实际指标集合完全一致的报告。旧版观测报告仍可生成只含原有指标的候选基线，但不会与含新版配额指标的报告直接比较。比较结果逐指标输出参考值、当前值、绝对/相对变化及 `improved`、`degraded`、`unchanged` 判断；存在任一退化时仍输出完整报告，但返回退出码 `3`，可直接用于 CI。候选和比较结果不复制逐 Case 内容、本地报告路径或用户正文，只保存报告指纹。
 
 完整路线见 [实施计划](docs/IMPLEMENTATION_PLAN.md)。
 

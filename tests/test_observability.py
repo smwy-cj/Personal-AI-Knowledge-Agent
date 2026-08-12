@@ -7,6 +7,7 @@ from personal_ai_agent.models import AgentTaskState, PlanStep, StepResult, TaskS
 from personal_ai_agent.observability import (
     ObservationValidationError,
     SQLiteEventStore,
+    record_event_safely,
 )
 from personal_ai_agent.orchestrator import Orchestrator, WorkflowRegistry
 
@@ -18,6 +19,16 @@ class ObservabilityTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def test_safe_recording_swallows_attribute_validation_failures(self):
+        recorded = record_event_safely(
+            self.store,
+            "provider_quota_waited",
+            attributes={"request_body": "must-not-be-recorded"},
+        )
+
+        self.assertFalse(recorded)
+        self.assertEqual(self.store.list_events(), [])
 
     def test_rejects_raw_or_unknown_sensitive_attributes(self):
         for key in ("prompt", "query", "content", "api_key", "unexpected"):
@@ -148,6 +159,29 @@ class ObservabilityTests(unittest.TestCase):
                 "error_type": "RetryableModelError",
             },
         )
+        for wait in (20, 80):
+            self.store.record(
+                "provider_quota_waited",
+                attributes={
+                    "provider_id": "provider",
+                    "quota_kind": "capacity",
+                    "wait_ms": wait,
+                },
+            )
+        self.store.record(
+            "provider_cooldown_updated",
+            attributes={"provider_id": "provider", "cooldown_ms": 1500},
+        )
+        self.store.record(
+            "provider_tokens_reconciled",
+            attributes={
+                "provider_id": "provider",
+                "estimated_tokens": 20,
+                "actual_tokens": 12,
+                "token_delta": -8,
+                "applied_token_adjustment": -8,
+            },
+        )
 
         summary = self.store.aggregate()
 
@@ -161,6 +195,18 @@ class ObservabilityTests(unittest.TestCase):
         self.assertEqual(summary["estimated_cost_usd"], 0.000054)
         self.assertEqual(summary["step_p50_latency_ms"], 20)
         self.assertEqual(summary["step_p95_latency_ms"], 100)
+        self.assertEqual(summary["provider_quota_wait_count"], 2)
+        self.assertEqual(summary["provider_quota_wait_ms"], 100)
+        self.assertEqual(summary["provider_quota_p50_wait_ms"], 20)
+        self.assertEqual(summary["provider_quota_p95_wait_ms"], 80)
+        self.assertEqual(summary["provider_cooldown_count"], 1)
+        self.assertEqual(summary["provider_cooldown_max_ms"], 1500)
+        self.assertEqual(summary["provider_token_reconciliation_count"], 1)
+        self.assertEqual(summary["provider_estimated_tokens"], 20)
+        self.assertEqual(summary["provider_actual_tokens"], 12)
+        self.assertEqual(summary["provider_token_estimate_delta"], -8)
+        self.assertEqual(summary["provider_token_estimate_absolute_error"], 8)
+        self.assertEqual(summary["provider_applied_token_adjustment"], -8)
 
     def test_retention_is_preview_only_until_explicitly_applied(self):
         old_id = self.store.record("task_started", "old-task")

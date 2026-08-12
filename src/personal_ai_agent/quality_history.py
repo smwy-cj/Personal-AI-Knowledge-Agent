@@ -12,8 +12,9 @@ from .quality_baseline import (
     validate_quality_baseline_scope,
 )
 from .quality_evaluation import (
-    OBSERVABILITY_MAXIMUM_METRICS,
+    OBSERVABILITY_LEGACY_MAXIMUM_METRICS,
     OBSERVABILITY_MINIMUM_METRICS,
+    OBSERVABILITY_QUOTA_MAXIMUM_METRICS,
     RETRIEVAL_MAXIMUM_METRICS,
     RETRIEVAL_MINIMUM_METRICS,
 )
@@ -96,13 +97,10 @@ def compare_quality_reports(
     current = _load_report(current_path)
     reference_scope, minimum_metrics, maximum_metrics = _report_profile(reference)
     current_scope, current_minimums, current_maximums = _report_profile(current)
-    if (
-        reference["schema"] != current["schema"]
-        or reference_scope != current_scope
-        or minimum_metrics != current_minimums
-        or maximum_metrics != current_maximums
-    ):
+    if reference["schema"] != current["schema"] or reference_scope != current_scope:
         raise ValueError("quality reports must have the same schema and evaluation scope")
+    if minimum_metrics != current_minimums or maximum_metrics != current_maximums:
+        raise ValueError("quality reports must have the same metric sets")
 
     reference_values = _metric_values(reference, minimum_metrics, maximum_metrics)
     current_values = _metric_values(current, minimum_metrics, maximum_metrics)
@@ -176,7 +174,18 @@ def _report_profile(
     if schema == "observability_summary_v1":
         if scope["evaluation_type"] != "observability":
             raise ValueError("observability report scope is invalid")
-        return scope, OBSERVABILITY_MINIMUM_METRICS, OBSERVABILITY_MAXIMUM_METRICS
+        quota_metrics = frozenset(
+            metric
+            for metric in OBSERVABILITY_QUOTA_MAXIMUM_METRICS
+            if metric in report
+        )
+        if quota_metrics and quota_metrics != OBSERVABILITY_QUOTA_MAXIMUM_METRICS:
+            raise ValueError("observability report quota metrics must be complete")
+        return (
+            scope,
+            OBSERVABILITY_MINIMUM_METRICS,
+            OBSERVABILITY_LEGACY_MAXIMUM_METRICS | quota_metrics,
+        )
     raise ValueError("unsupported quality report schema")
 
 

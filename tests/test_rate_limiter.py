@@ -7,6 +7,7 @@ from personal_ai_agent.rate_limiter import (
     ProviderRateLimitExceeded,
     SQLiteProviderRateLimiter,
 )
+from personal_ai_agent.observability import SQLiteEventStore
 
 
 class MutableClock:
@@ -29,6 +30,14 @@ class ProviderRateLimiterTests(unittest.TestCase):
     def limiter(self, sleeper=lambda seconds: None):
         return SQLiteProviderRateLimiter(
             self.database, clock=self.clock, sleeper=sleeper
+        )
+
+    def observed_limiter(self, sleeper=lambda seconds: None):
+        return SQLiteProviderRateLimiter(
+            self.database,
+            clock=self.clock,
+            sleeper=sleeper,
+            event_store=SQLiteEventStore(Path(self.temporary.name) / "events.sqlite3"),
         )
 
     def test_two_instances_share_smooth_slots(self):
@@ -129,6 +138,35 @@ class ProviderRateLimiterTests(unittest.TestCase):
         limiter.reserve_capacity_tracked("queued", 600, 60, 5, 20)
         self.assertEqual(limiter.reconcile_tokens(first, 4), 0)
         self.assertEqual(limiter.reserve_tokens("queued", 60, 1, 20), 15.0)
+
+    def test_observability_records_only_safe_quota_metrics_once(self):
+        limiter = self.observed_limiter()
+        reservation = limiter.reserve_capacity_tracked(
+            "provider", 600, 60, 10, 20
+        )
+        limiter.wait_for_capacity_tracked("provider", 600, 60, 5, 20)
+        limiter.defer_provider("provider", 30)
+        limiter.defer_provider("provider", 2)
+        limiter.reconcile_tokens(reservation, 4)
+        limiter.reconcile_tokens(reservation, 4)
+
+        events = limiter.event_store.list_events(limit=20)
+        self.assertEqual(
+            sorted(item.event_type for item in events),
+            [
+                "provider_cooldown_updated",
+                "provider_quota_waited",
+                "provider_tokens_reconciled",
+            ],
+        )
+        serialized = repr(events)
+        self.assertNotIn("reservation_id", serialized)
+        self.assertNotIn("blocked_until", serialized)
+        reconciliation = next(
+            item for item in events
+            if item.event_type == "provider_tokens_reconciled"
+        )
+        self.assertEqual(reconciliation.attributes["token_delta"], -6)
 
     def test_concurrency_slots_are_shared_and_released(self):
         first = self.limiter()
