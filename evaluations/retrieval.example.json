@@ -1,0 +1,11 @@
+{
+  "schema": "retrieval_eval_v1",
+  "name": "personal-knowledge-retrieval-example",
+  "cases": [
+    {
+      "case_id": "example-architecture",
+      "query": "agent architecture checkpoint recovery",
+      "expected_paths": ["Architecture.md"]
+    }
+  ]
+}

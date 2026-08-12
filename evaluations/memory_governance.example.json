@@ -1,0 +1,16 @@
+{
+  "schema": "memory_governance_eval_v1",
+  "name": "memory-governance-example",
+  "cases": [
+    {
+      "case_id": "approval-example",
+      "subject": "memory-policy",
+      "statement": "Semantic memory requires source-backed governance.",
+      "source_ids": ["chunk-example"],
+      "existing_memories": [],
+      "expected_status": "PENDING",
+      "expected_reason": null,
+      "expected_requires_approval": true
+    }
+  ]
+}

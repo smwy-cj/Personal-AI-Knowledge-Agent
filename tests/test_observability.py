@@ -1,0 +1,194 @@
+import tempfile
+import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+from personal_ai_agent.models import AgentTaskState, PlanStep, StepResult, TaskStatus
+from personal_ai_agent.observability import (
+    ObservationValidationError,
+    SQLiteEventStore,
+)
+from personal_ai_agent.orchestrator import Orchestrator, WorkflowRegistry
+
+
+class ObservabilityTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.store = SQLiteEventStore(Path(self.temporary.name) / "events.sqlite3")
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def test_rejects_raw_or_unknown_sensitive_attributes(self):
+        for key in ("prompt", "query", "content", "api_key", "unexpected"):
+            with self.subTest(key=key), self.assertRaises(
+                ObservationValidationError
+            ):
+                self.store.record("step_started", attributes={key: "private"})
+        self.assertEqual(self.store.list_events(), [])
+
+    def test_orchestrator_records_metadata_without_goal_or_result_content(self):
+        registry = WorkflowRegistry()
+        registry.register("work", lambda state, step: StepResult(token_usage=3))
+        state = AgentTaskState.create("thread-private", "private user question")
+
+        result = Orchestrator(registry, event_store=self.store).run(
+            state, [PlanStep("s1", "research", "work")]
+        )
+
+        self.assertEqual(result.status, TaskStatus.COMPLETED)
+        events = self.store.list_task_events(state.task_id)
+        self.assertEqual(
+            [item.event_type for item in events],
+            [
+                "task_started",
+                "step_started",
+                "step_completed",
+                "verification_started",
+                "task_completed",
+            ],
+        )
+        serialized = repr(events)
+        self.assertNotIn("private user question", serialized)
+        self.assertNotIn("thread-private", serialized)
+        self.assertEqual(events[-1].attributes["token_usage"], 3)
+
+    def test_failed_task_has_step_and_task_terminal_events(self):
+        registry = WorkflowRegistry()
+        registry.register("work", lambda state, step: (_ for _ in ()).throw(ValueError("bad private value")))
+        state = AgentTaskState.create("thread", "private goal")
+
+        result = Orchestrator(registry, event_store=self.store).run(
+            state, [PlanStep("s1", "research", "work")]
+        )
+
+        self.assertEqual(result.status, TaskStatus.FAILED)
+        events = self.store.list_task_events(state.task_id)
+        self.assertEqual(events[-2].event_type, "step_failed")
+        self.assertEqual(events[-1].event_type, "task_failed")
+        self.assertEqual(events[-2].attributes["error_type"], "ValueError")
+        self.assertNotIn("bad private value", repr(events))
+
+    def test_event_storage_io_failure_does_not_change_task_outcome(self):
+        class BrokenStore:
+            def record(self, *arguments, **keywords):
+                raise OSError("disk unavailable")
+
+        registry = WorkflowRegistry()
+        registry.register("work", lambda state, step: StepResult())
+
+        result = Orchestrator(registry, event_store=BrokenStore()).run(
+            AgentTaskState.create("thread", "goal"),
+            [PlanStep("s1", "work", "work")],
+        )
+
+        self.assertEqual(result.status, TaskStatus.COMPLETED)
+
+    def test_aggregate_reports_terminal_counts_tokens_retries_and_latency(self):
+        self.store.record(
+            "task_completed",
+            "task-1",
+            attributes={
+                "final_status": "COMPLETED",
+                "tool_calls": 2,
+                "model_call_count": 1,
+                "token_usage": 15,
+                "retry_count": 0,
+            },
+        )
+        self.store.record(
+            "task_failed",
+            "task-2",
+            attributes={
+                "final_status": "FAILED",
+                "tool_calls": 1,
+                "model_call_count": 1,
+                "token_usage": 8,
+                "retry_count": 1,
+            },
+        )
+        for duration in (10, 20, 100):
+            self.store.record(
+                "step_completed",
+                "task-1",
+                attributes={
+                    "executor": "work",
+                    "kind": "test",
+                    "attempt": 1,
+                    "duration_ms": duration,
+                    "artifact_count": 0,
+                    "evidence_count": 0,
+                    "memory_candidate_count": 0,
+                },
+            )
+        self.store.record(
+            "model_completed",
+            "task-1",
+            attributes={
+                "provider_id": "provider",
+                "model_id": "model",
+                "task_type": "summary",
+                "prompt_version": "v1",
+                "input_tokens": 12,
+                "output_tokens": 3,
+                "duration_ms": 40,
+                "model_call_count": 1,
+                "estimated_cost_microusd": 54,
+            },
+        )
+        self.store.record(
+            "model_retry",
+            "task-2",
+            attributes={
+                "provider_id": "provider",
+                "task_type": "summary",
+                "prompt_version": "v1",
+                "attempt": 1,
+                "retry_delay_ms": 250,
+                "error_type": "RetryableModelError",
+            },
+        )
+
+        summary = self.store.aggregate()
+
+        self.assertEqual(summary["terminal_task_count"], 2)
+        self.assertEqual(summary["task_status_counts"], {"FAILED": 1, "COMPLETED": 1})
+        self.assertEqual(summary["task_success_rate"], 0.5)
+        self.assertEqual(summary["input_tokens"], 12)
+        self.assertEqual(summary["output_tokens"], 3)
+        self.assertEqual(summary["model_retry_count"], 1)
+        self.assertEqual(summary["estimated_cost_microusd"], 54)
+        self.assertEqual(summary["estimated_cost_usd"], 0.000054)
+        self.assertEqual(summary["step_p50_latency_ms"], 20)
+        self.assertEqual(summary["step_p95_latency_ms"], 100)
+
+    def test_retention_is_preview_only_until_explicitly_applied(self):
+        old_id = self.store.record("task_started", "old-task")
+        recent_id = self.store.record("task_started", "recent-task")
+        old_time = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
+        with self.store._connect() as connection:
+            connection.execute(
+                "UPDATE observation_events SET created_at = ? WHERE event_id = ?",
+                (old_time, old_id),
+            )
+
+        preview = self.store.prune(30)
+
+        self.assertFalse(preview["applied"])
+        self.assertEqual(preview["matched_count"], 1)
+        self.assertEqual(preview["deleted_count"], 0)
+        self.assertEqual(len(self.store.list_events()), 2)
+
+        applied = self.store.prune(30, apply=True)
+
+        self.assertTrue(applied["applied"])
+        self.assertEqual(applied["matched_count"], 1)
+        self.assertEqual(applied["deleted_count"], 1)
+        events = self.store.list_events()
+        self.assertEqual({item.event_id for item in events if item.task_id}, {recent_id})
+        self.assertEqual(events[0].event_type, "events_pruned")
+        self.assertEqual(events[0].attributes["deleted_count"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

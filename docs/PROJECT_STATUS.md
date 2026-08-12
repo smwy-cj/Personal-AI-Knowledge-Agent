@@ -1,0 +1,108 @@
+# Personal AI Knowledge Agent 项目状态总览
+
+更新基线：Iteration 18
+
+## 总体结论
+
+项目已经从架构设想进入“可运行的单 Orchestrator 可信知识闭环”阶段。两份架构文档中最重要的工程化纠偏已经落实：当前核心不是角色扮演式多 Agent，而是结构化状态、确定性 Workflow、持久化恢复、证据验证、记忆治理和受控写回。
+
+P0 最小可信闭环已完成。P1 可靠性增强已完成主要运行时地基，但尚未达到生产发布标准。P2 多 Agent 与 P3 主动学习按原评估建议保持未启动，必须等待正式评测证明单 Orchestrator 存在明确瓶颈。
+
+## 路线状态
+
+| 阶段 | 状态 | 已具备 | 仍缺少 |
+| --- | --- | --- | --- |
+| P0 最小可信闭环 | 完成 | Vault 增量摄取、关键词/向量/混合检索、Research Evidence、结构化摘要、引用验证、人工确认、Memory Store、受控写回、CLI | 需要真实用户数据上的验收与性能基线 |
+| P1 可靠性增强 | 进行中 | Task State、结构化计划、预算、Checkpoint、失败恢复、Verifier、Memory Candidate、Model Router、Provider 退避/共享限流、执行租约、持久化取消、结构化事件/成本聚合/安全保留、检索/研究/记忆评测与质量门禁 | Planner、用户偏好、Prompt/Workflow 注册表、Coding Sandbox、成本回归门禁与真实用户反馈评测 |
+| P2 按需多智能体 | 未启动 | 已保留 Workflow Registry 和结构化状态边界 | Sub-Agent 协议、并行调度、消息 Schema、Reviewer、MCP 工具治理；需先有评测证据 |
+| P3 主动学习 | 未启动 | Memory Governance 可作为未来安全边界 | 知识缺口扫描、学习计划、项目跟踪、复习任务、长期主题与主动权限策略 |
+
+## 已完成的核心能力
+
+### 运行时与持久化
+
+- 稳定的 `AgentTaskState`、`PlanStep`、预算和状态机；
+- 确定性依赖调度、有限重试、工具/模型/Token 预算；
+- SQLite 最新快照与追加式 Checkpoint 历史；
+- 中断恢复采用 at-least-once 语义；
+- SQLite 执行租约、心跳、过期接管和陈旧 owner 写保护；
+- 持久化取消请求与 `task-cancel`。
+- 独立脱敏 Event Store 与 `task-events` 生命周期轨迹。
+
+### 知识与检索
+
+- Obsidian Markdown 增量摄取、删除检测和稳定文档/Chunk ID；
+- Frontmatter、标题层级、标签、Wiki Link 与 1-based 行号；
+- FTS5 与确定性关键词回退；
+- Provider 版本化向量缓存、精确余弦检索和加权 RRF；
+- 检索结果保留 Vault、文件、Chunk、行号、内容与匹配方法。
+
+### 研究与模型
+
+- Evidence Pack 与结构化 Citation；
+- Citation Integrity Verifier 回查当前索引并检测来源漂移；
+- 结构化研究摘要和确定性 Markdown 渲染；
+- Model Capability Registry 按能力、上下文、成本和隐私路由；
+- OpenAI-compatible 模型/Embedding Adapter；
+- 环境凭据边界、HTTPS 约束、超时、有限 fallback、指数退避与 `Retry-After`；
+- SQLite 跨进程平滑 Provider 限流与最大等待边界；
+- Embedding HTTP `413` 自适应拆批。
+
+### 记忆与写回
+
+- 从已验证摘要生成带 Chunk 来源的语义 Memory Candidate；
+- 来源、敏感内容、去重和同主题冲突治理；
+- `WAITING_USER` 人工逐项批准/拒绝；
+- 独立 SQLite Semantic Memory Store；
+- 受控 Vault 目录、安全文件名、原子写入、内容哈希、收据和漂移检测；
+- 写回后自动重新索引。
+
+### 应用入口与验证
+
+- 无密钥 JSON 配置与严格路径校验；
+- JSON CLI 覆盖同步、检索、研究、任务、取消、记忆审批与写回；
+- 当前 103 项自动化测试覆盖单元、Workflow、持久化、CLI、观测、质量门禁、限流和端到端闭环；
+- 跨平台一键验收入口统一执行测试、源码编译和 CLI 冒烟检查；
+- GitHub Actions 覆盖 Python 3.9/3.11/3.13、Linux/Windows、包安装与安装后命令检查；
+- 版本化检索评测集与 Recall@K、Hit Rate@K、MRR@K、P50/P95 延迟报告；
+- 人工引用标签的 Research Summary 评测与规则标签的 Memory Governance 评测；
+- 可配置质量门禁及 CI 可区分的 `0/3/2` 退出码；
+- 脱敏事件窗口聚合：终态、成功率、调用、重试、Token、估算美元成本与延迟分位数；
+- 事件保留默认只预览，显式执行时事务性清理并保留脱敏审计事件；
+- Python 3.9+ 标准库实现，无强制第三方运行依赖。
+
+## 当前主要缺口
+
+1. Planner 仍由调用方提供结构化计划，尚未实现受 Schema 约束的动态规划与有限 Replan。
+2. 已有事件窗口聚合和静态价格估算，但尚缺按任务/Provider/时间范围的完整成本报表及供应商账单对账。
+3. 已有共享请求速率限制，但尚未按 Token、并发连接或供应商动态配额限流。
+4. 长期记忆目前聚焦语义事实，用户偏好、情景记忆和撤销/修订策略尚未完善。
+5. Coding Sandbox 与高风险工具权限模型尚未实现。
+6. 固定评测已覆盖检索、引用标签和记忆治理；自然语言蕴含、真实记忆接受率和产品反馈仍无基线。
+7. 当前同步 HTTP 请求无法在 socket 内部强制中断，只能在请求前、步骤边界和重试等待期取消，并依靠 timeout 收敛。
+
+## 下一阶段建议
+
+下一框架里程碑应扩展 Observability + Evaluation，而不是立即增加多 Agent：
+
+1. 将 P50/P95 延迟和货币成本基线纳入可配置回归门禁；
+2. 扩展固定语料到自然语言蕴含与真实用户记忆接受反馈；
+3. 将共享 Provider 限流扩展到 Token/并发配额和动态供应商响应；
+4. 增加按任务、Provider 与时间范围的成本报表和供应商账单对账接口；
+5. 只有评测证明规划质量是主要瓶颈后，再实现结构化 Planner；只有证明单 Workflow 存在上下文、并行或工具隔离瓶颈后，再进入 P2 多 Agent。
+
+## Iteration 18：交付基线
+
+已将本地测试、源码编译和 CLI 冒烟检查收敛到跨平台 `scripts/verify.py`，并增加 GitHub Actions 多版本、多系统验收。CI 会先安装项目，再运行完整验收，最后检查安装产生的 `personal-ai-agent` 命令，避免只在源码目录和临时 `PYTHONPATH` 下可用。
+
+跨版本验收同时发现并修复了 Windows 新版 Python 下 SQLite 文件句柄依赖垃圾回收释放的问题：所有存储连接现在都在事务结束后显式关闭，避免临时数据库、迁移或进程退出时出现文件锁残留。
+
+包元数据现已声明 README、Python 版本和项目主题分类；仓库忽略规则也覆盖常见测试、类型检查和代码质量缓存。该迭代只建立可交付地基，不改变 Research、Memory 或 Provider 的业务行为和数据库 Schema。
+
+在 Git 历史正式纳入当前源码、测试、文档和工作流后，下一增量进入真实评测语料与性能/成本回归门禁。
+
+## 当前验收命令
+
+```powershell
+python scripts/verify.py
+```
