@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: personal-ai-knowledge-agent-demo
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: PERSONAL_AGENT_CONFIG
+        value: /app/course_demo/config.json
+      - key: PERSONAL_AGENT_DEMO_MODE
+        value: "1"
+      - key: PERSONAL_AGENT_DEMO_DATA_ROOT
+        value: /app/course_demo
+      - key: PERSONAL_AGENT_HTTPS
+        value: "1"
+      - key: PERSONAL_AGENT_WEB_SECRET
+        generateValue: true

@@ -10,3 +10,7 @@ build/
 *.egg-info/
 agent.config.json
 data/
+.env
+.env.*
+!.env.example
+secret-scan-report.json
