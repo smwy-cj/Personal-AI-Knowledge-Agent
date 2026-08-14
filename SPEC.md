@@ -1,6 +1,6 @@
 # Personal AI Knowledge Agent 课程项目规格
 
-状态：Draft v1  
+状态：已接受并实现于 `v0.1.0`；凭据、Web 与部署边界的后续澄清以 `SPEC_v2.md` 为准
 适用方向：AI4SE B 类应用项目（包含受治理 Agent Workflow）  
 基线 commit：`8b102d0ef76637037e4d1aef9640b47ac0a7a4b7`  
 规格日期：2026-08-13

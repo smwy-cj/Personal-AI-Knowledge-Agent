@@ -166,7 +166,7 @@ flowchart TB
 - `.gitlab-ci.yml` 包含 `unit-test`、包构建、容器构建和受保护手动部署契约；
 - 质量数据集、报告 schema 和基线候选可版本化，回归使用独立退出码。
 
-截至本快照，干净 Linux 镜像与主机环境均通过 225 项测试；加入课程文档契约后应以最新一键验收输出为准。远程 CI、公开 URL 和 PR/MR 仍需真实外部证据才能宣称完成。
+`v0.1.0` Release 基线在主机和干净 Linux 镜像中通过 228 项测试；当前文档收口工作区通过 232 项测试。GitHub Actions 的 Linux Python 3.9/3.11/3.13 与 Windows 3.11 已真实通过，Draft PR #1 和 Release 已存在。公开 WebUI 与人工 review 尚未发生，不能从本地 WebUI 或 Draft PR 推断完成。
 
 ## 关键设计取舍
 
@@ -175,4 +175,3 @@ flowchart TB
 - 选择 Flask/Jinja 而非 SPA：复用 Python 服务边界，减少构建链和浏览器侧秘密风险；
 - 选择 Docker 为主分发、Python 包为辅：覆盖课程 WebUI 部署与本地开发；
 - 选择 demo mode 而非公开个人模式：项目没有多租户身份系统，不假装已具备 SaaS 安全边界。
-

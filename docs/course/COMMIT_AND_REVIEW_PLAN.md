@@ -1,5 +1,7 @@
 # Commit、PR/MR 与评审执行方案
 
+> 执行更新（2026-08-14）：分阶段 commit 已完成并推送到 `agent/iteration-18-delivery-baseline`，Draft PR #1 已创建，`v0.1.0` Release 已发布。当前尚无真实人工 review/批准/合并证据；相关事件发生前不得提前填写。Release 事实见 `GITHUB_RELEASE_EVIDENCE.md`。
+
 日期：2026-08-14  
 当前分支：`agent/iteration-18-delivery-baseline`  
 当前基线：`8b102d0`
@@ -286,4 +288,3 @@ git commit -m "<message>"
 - 所有本地验证、远程 CI、部署和未完成项分别列出。
 
 PR 目标分支应由学生根据课程仓库规则确认，不能默认直接合入 `main`。
-

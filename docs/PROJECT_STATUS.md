@@ -1,6 +1,20 @@
 # Personal AI Knowledge Agent 项目状态总览
 
-更新基线：Iteration 26
+更新基线：Release `v0.1.0` + 交付文档收口（2026-08-14）
+
+## 当前发布摘要
+
+- Release：[`v0.1.0`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0)；
+- Release commit：`9b13b1bf4dac37ef72b2e004b5af32440dd754aa`；
+- 验证基线：Release 为 228 项；当前文档收口工作区为 232 项，全部通过；
+- 远程 CI：GitHub Actions 上 Linux Python 3.9/3.11/3.13 与 Windows Python 3.11 全部通过；
+- 分发：GitHub 源码包、wheel、source distribution 与 SHA-256 校验文件；
+- Web：Flask/Jinja 页面由 Waitress 提供服务，支持知识状态、搜索、Research、任务查看和 Memory 审批；
+- 凭据：本机优先使用 OS keyring，容器可通过显式环境变量注入；
+- 安全：工作区与完整 Git 历史的高置信度秘密扫描均为 0；
+- 提交边界：教师已确认可提交 Release 链接，当前没有公开 WebUI，因此 `is_deployed` 应为 `false`。
+
+当前版本已经满足可复现的课程分发基线，但不等于生产级 SaaS。学生反思已由本人初稿整理形成；剩余人工交付项是完成 PR 人工评审/是否合并决策，以及最后填写并并列提交 `submission.jsonc`。
 
 ## 总体结论
 
@@ -61,7 +75,7 @@ P0 最小可信闭环已完成。P1 可靠性增强已完成主要运行时地�
 
 - 无密钥 JSON 配置与严格路径校验；
 - JSON CLI 覆盖同步、检索、研究、任务、取消、记忆审批与写回；
-- 当前 149 项自动化测试覆盖单元、Workflow、持久化、CLI、观测、质量门禁、限流和端到端闭环；
+- Release 基线的 228 项自动化测试覆盖单元、Workflow、持久化、CLI、Web、凭据、容器交付、观测、质量门禁、限流和端到端闭环；
 - 跨平台一键验收入口统一执行测试、源码编译和 CLI 冒烟检查；
 - GitHub Actions 覆盖 Python 3.9/3.11/3.13、Linux/Windows、包安装与安装后命令检查；
 - 版本化检索评测集与 Recall@K、Hit Rate@K、MRR@K、P50/P95 延迟报告；
@@ -72,7 +86,7 @@ P0 最小可信闭环已完成。P1 可靠性增强已完成主要运行时地�
 - 严格版本化供应商账单导入、账单指纹、按模型成本差异和容差门禁；
 - 脱敏事件窗口聚合：终态、成功率、调用、重试、Token、估算美元成本、延迟分位数、Provider 配额等待/冷却和 Token 估算误差；
 - 事件保留默认只预览，显式执行时事务性清理并保留脱敏审计事件；
-- Python 3.9+ 标准库实现，无强制第三方运行依赖。
+- 支持 Python 3.9–3.13；运行时依赖 Flask、keyring 和 Waitress，具体约束以 `pyproject.toml` 为准。
 
 ## 当前主要缺口
 

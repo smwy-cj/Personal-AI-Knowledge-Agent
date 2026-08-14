@@ -1,13 +1,15 @@
 # Personal AI Knowledge Agent 课程完善实施计划
 
-状态：Draft v1  
-对应规格：`SPEC.md` Draft v1  
+状态：已执行；T15 最终人工交付进行中
+对应规格：`SPEC.md` + `SPEC_v2.md`
 计划日期：2026-08-13  
 基线 commit：`8b102d0ef76637037e4d1aef9640b47ac0a7a4b7`
+当前发布：[`v0.1.0`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0)，Release commit `9b13b1bf4dac37ef72b2e004b5af32440dd754aa`
+最新自动验收：Release 基线 228 项，当前文档收口工作区 232 项，全部通过；GitHub Actions 的 Linux 3.9/3.11/3.13 和 Windows 3.11 全部通过。
 
 ## 1. 执行原则
 
-1. 现有文档全部只读；课程材料和修订版均创建新文件。
+1. 初始阶段采用“旧文档只读、新建版本”的证据保护策略；2026-08-14 用户明确要求按完整项目统一完善所有 Markdown，当前活文档因此可以更新，历史证据和测试语料仍保持原样。
 2. 每个实现任务先增加失败测试，再编写最小实现，最后重构并运行完整验证。
 3. 每个独立实现模块使用独立分支和 PR；不得伪造过去不存在的 PR 或测试过程。
 4. 离线测试不得调用真实付费 API、真实密钥环或真实个人 Vault。
@@ -57,7 +59,7 @@ flowchart TD
 
 ### T0：固定当前工程基线
 
-状态：`DONE`  
+状态：`DONE`
 依赖：无  
 commit：待后续首次课程文档提交时填写  
 涉及文件：
@@ -75,7 +77,7 @@ commit：待后续首次课程文档提交时填写
 
 ### T1：创建课程规格
 
-状态：`DONE`  
+状态：`DONE`
 依赖：T0  
 commit：待后续首次课程文档提交时填写  
 涉及文件：
@@ -94,7 +96,7 @@ commit：待后续首次课程文档提交时填写
 
 ### T2：建立实施计划与过程日志
 
-状态：`IN PROGRESS`  
+状态：`DONE`
 依赖：T1  
 涉及文件：
 
@@ -119,7 +121,7 @@ git status --short
 
 ### T3：陌生智能体冷启动验证
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T2  
 建议分支：`course/cold-start-validation`  
 可并行：否；必须先于 T4/T6 正式实现
@@ -160,7 +162,7 @@ git status --short
 
 ### T4：实现凭据存储抽象
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T3  
 建议分支：`feature/credential-store`  
 可并行：可与 T6 并行
@@ -202,7 +204,7 @@ python scripts/verify.py
 
 ### T5：实现凭据 CLI 生命周期与 Provider 解析
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T4  
 建议分支：`feature/credential-cli`  
 可并行：可与 T7/T8 并行
@@ -244,7 +246,7 @@ python scripts/verify.py
 
 ### T6：建立 Web 应用边界与框架
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T3  
 建议分支：`feature/web-foundation`  
 可并行：可与 T4 并行
@@ -285,7 +287,7 @@ python scripts/verify.py
 
 ### T7：实现知识状态与搜索 WebUI
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T6  
 建议分支：`feature/web-search`  
 可并行：可与 T9 并行
@@ -325,7 +327,7 @@ python scripts/verify.py
 
 ### T8：实现 Research、Task 与 Memory 审批 WebUI
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T7  
 建议分支：`feature/web-research-memory`  
 可并行：否
@@ -368,7 +370,7 @@ python scripts/verify.py
 
 ### T9：Web 安全、可访问性与错误边界
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T6  
 建议分支：`feature/web-security`  
 可并行：可与 T7 并行，合并前需在 T8 上回归
@@ -410,7 +412,7 @@ python scripts/verify.py
 
 ### T10：Docker 与 Python 包分发
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T5、T8、T9  
 建议分支：`delivery/container-package`  
 可并行：否
@@ -459,7 +461,7 @@ python scripts/verify.py
 
 ### T11：GitLab CI/CD
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T10  
 建议分支：`delivery/gitlab-ci`  
 可并行：否
@@ -501,7 +503,7 @@ rg -n '^unit-test:' .gitlab-ci.yml
 
 ### T12：部署公开演示环境
 
-状态：`TODO`  
+状态：`DONE（采用教师确认的 GitHub Release 替代路线）`
 依赖：T11  
 建议分支：`delivery/demo-deployment`  
 可并行：否
@@ -539,7 +541,7 @@ rg -n '^unit-test:' .gitlab-ci.yml
 
 ### T13：干净环境与安全验收
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T12  
 建议分支：`delivery/clean-machine-verification`  
 可并行：否
@@ -565,7 +567,7 @@ rg -n '^unit-test:' .gitlab-ci.yml
 
 ### T14：课程提交文档与演示材料
 
-状态：`TODO`  
+状态：`DONE`
 依赖：T13  
 建议分支：`docs/course-submission`  
 可并行：部分证据材料可随实现同步新增
@@ -603,7 +605,7 @@ rg -n 'TODO|待填写|待验证' README_COURSE.md docs/course
 
 ### T15：最终审计与提交冻结
 
-状态：`TODO`  
+状态：`IN PROGRESS`
 依赖：T14  
 建议分支：`release/course-final`  
 可并行：否

@@ -1,8 +1,8 @@
 # Personal AI Knowledge Agent 课程项目规格澄清 v2
 
-状态：Accepted clarification  
+状态：Accepted clarification；已实现于 `v0.1.0`
 日期：2026-08-13  
-基础规格：`SPEC.md` Draft v1  
+基础规格：`SPEC.md`（已接受并实现）
 产生原因：陌生智能体冷启动验证暴露阻塞性歧义
 
 ## 1. 使用规则

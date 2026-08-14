@@ -1,6 +1,6 @@
 # Personal AI Knowledge Agent — AI4SE 课程交付入口
 
-本文件是面向助教和首次使用者的新入口，不替换仓库原有 `README.md`。截至 2026-08-14，源码、本地 WebUI、Docker 分发、GitLab CI 契约、凭据治理和自动测试已完成；公网部署 URL、真实远程 CI/评审证据和学生反思仍待形成。
+本文件面向助教和首次使用者。截至 2026-08-14，源码、本地 WebUI、Docker/Python 包分发、GitHub Actions、凭据治理、自动测试和学生反思已经完成，并已发布 [`v0.1.0`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0)。当前没有公开 WebUI；按照教师补充说明，提交采用 GitHub Release 路线并填写 `is_deployed=false`。最终人工评审仍待完成。
 
 ## 项目简介
 
@@ -42,7 +42,7 @@ Linux/macOS 激活命令为 `source .venv/bin/activate`。安装后提供三个�
 docker build -t personal-ai-knowledge-agent:course .
 ```
 
-仓库当前提供可复现的镜像构建方式，但尚未记录公开 registry 地址；不要把本地构建误写为已经发布的分发产物。
+仓库提供可复现的镜像构建方式，但没有公开容器 registry。正式 GitHub Release 已包含源码归档、wheel、source distribution 和 SHA-256 校验文件；不要把本地容器镜像误写为 registry 发布物。
 
 ## 运行与演示
 
@@ -116,7 +116,7 @@ python -m pip install build
 python -m build
 ```
 
-可生成 wheel 和 source distribution。当前尚未发布到 PyPI，课程主分发形态是 Dockerfile 与可本地构建的 Python 包。
+可生成 wheel 和 source distribution。当前尚未发布到 PyPI；课程分发入口是 GitHub Release，Dockerfile 与本地可构建 Python 包用于复现和演示。
 
 ## 目录结构
 
@@ -175,11 +175,11 @@ python scripts/verify.py
 该命令运行完整测试、编译检查、CLI 烟雾测试、样例 Vault 同步、成本/账单核对和质量基线流程。2026-08-14 的最新结果为：
 
 ```text
-Ran 225 tests
+Ran 228 tests
 OK
 ```
 
-本次新增交付文档契约后，最终数量应以当前命令输出为准。
+文档收口继续增加一致性测试，最终数量应以当前命令输出为准；228 是已发布 `v0.1.0` 的固定基线。
 
 密钥扫描：
 
@@ -193,15 +193,15 @@ python scripts/scan_secrets.py --working-tree --git-history
 docker build -f Dockerfile.verify -t personal-ai-knowledge-agent:verification .
 ```
 
-GitLab CI 的 `unit-test` job 会先进行工作区密钥扫描，再执行同一验收入口。最后一次真实远程 pipeline 尚无证据，不能用本地契约测试替代。
+GitHub Actions 会先安装完整运行依赖，再执行同一验收入口和秘密扫描；Linux Python 3.9/3.11/3.13 与 Windows Python 3.11 均已通过。`.gitlab-ci.yml` 仍保留课程要求的 `unit-test`、package、container 和 deploy 契约，但当前仓库没有声称执行过 GitLab 远程 pipeline。
 
 ## 已知限制与未完成项
 
-- 还没有经复验且可提交的公开 HTTPS WebUI URL；
-- 还没有公开 registry 或 PyPI 发布地址；
-- 当前工作区变更尚未形成课程所需的完整 commit、PR/MR 与人工评审证据；
-- 当前没有最终远程 CI pass 记录；
-- `REFLECTION.md` 必须由学生本人撰写，仓库当前不应由 AI 生成该正文；
+- 没有公开 HTTPS WebUI URL；教师确认的 Release 替代路线下应填写 `is_deployed=false`；
+- 没有公开容器 registry 或 PyPI 地址，但已有可提交的 GitHub Release 分发链接；
+- 当前存在 Draft PR #1，但还没有真实的人工 review/批准或合并证据；
+- GitHub Actions 已通过；GitLab 配置只代表可审查契约，不代表真实 GitLab pipeline；
+- `REFLECTION.md` 已由学生完整初稿整理形成，并在文末披露 AI 仅参与结构、语言和事实核对；
 - 免费 Render 实例可能冷启动，文件系统可能重置，公开演示只适合脱敏样例；
 - 当前 Research 使用固定五步计划，不提供开放式动态 Planner；
 - 真实模型质量、费用和延迟依赖用户选择的兼容 Provider，离线测试不代表供应商 SLA；
@@ -215,11 +215,11 @@ GitLab CI 的 `unit-test` job 会先进行工作区密钥扫描，再执行同�
 - 演示：`docs/course/DEMO_GUIDE_v2.md`
 - 安全：`docs/course/WEB_SECURITY.md`、`docs/course/SECRET_SCAN_EVIDENCE.md`
 - 分发与部署：`docs/course/DISTRIBUTION_AND_DEPLOYMENT.md`、`docs/course/RENDER_DEPLOYMENT_GUIDE.md`
-- CI/CD：`docs/course/CI_CD_EVIDENCE.md`
+- CI/CD：`docs/course/CI_CD_EVIDENCE.md`（历史 GitLab 配置快照）、`docs/course/CI_CD_EVIDENCE_v2.md`（当前 GitHub Actions 证据）
+- Release：`docs/course/GITHUB_RELEASE_EVIDENCE.md`
 - 干净环境：`docs/course/CLEAN_MACHINE_VERIFICATION.md`
-- 阶段日志：`AGENT_LOG.md` 至 `AGENT_LOG_v11.md`
+- 阶段日志：`AGENT_LOG.md` 至 `AGENT_LOG_v12.md`
 
 ## 许可证与第三方依赖
 
 项目采用仓库 `LICENSE` 所示许可证。运行时直接依赖 Flask、keyring 和 Waitress；它们各自适用其上游许可证。提交前应由学生再次核验锁定版本、许可证兼容性和最终仓库可见内容。
-

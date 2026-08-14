@@ -73,7 +73,7 @@
 总结你本人认为最有效的 prompt / context 做法，可从以下问题展开：
 
 - 为什么先让智能体读取课程要求和实际仓库，再允许宣称完成？
-- 为什么要求只创建新文档，保留旧文档作为历史证据？
+- 为什么早期要求只创建新文档；后来又怎样在更新活文档的同时保留历史快照和测试语料？
 - 为什么把“本地通过”“远程 CI 通过”“公网部署完成”分开？
 - 明确禁止虚构 URL、commit、PR 和用户测试是否改善了可靠性？
 - 长任务中阶段日志、验收命令和剩余文件清单怎样帮助恢复上下文？
@@ -113,12 +113,15 @@
 - 凭据：OS keyring 优先，显式环境变量后备，状态不回显秘密；
 - WebUI：Flask/Jinja/Waitress，通过 `WebApplicationPort` 隔离业务层；
 - 公开演示：固定脱敏 Vault、fake Provider、临时数据、无凭据管理；
-- 分发：Docker 主路线，Python 包辅助；
-- 截至 T13：Windows 与干净 Linux 均有 225 项测试通过，秘密扫描为 0；
-- 仍缺：真实公开 URL、最终远程 pipeline、完整 commit/PR 证据和学生反思；
-- 开发过程按用户要求忽略 Superpowers，并采用版本化新文档保留历史。
+- 分发：GitHub Release `v0.1.0` 已发布，包含源码、wheel、source distribution 和 SHA-256；Docker 与 Python 包构建用于复现；
+- Release 基线：228 项测试通过，干净 Linux 验证通过，工作区与 Git 历史秘密扫描均为 0；
+- 远程 CI：GitHub Actions 的 Linux Python 3.9/3.11/3.13 和 Windows 3.11 全部通过；GitLab 仅有配置契约；
+- 交付：Draft PR #1 已存在，但仍缺真实人工 review/批准/合并证据；
+- 部署：没有公开 WebUI；教师确认可提交 Release 链接并填写 `is_deployed=false`；
+- 仍缺：学生本人 `REFLECTION.md`、最终人工评审记录和最终验收文件；
+- 开发过程按用户要求忽略 Superpowers；早期以版本化新文档保留历史，后期按用户新要求统一更新活文档，并继续保护历史证据和测试语料。
 
-建议优先查阅：`SPEC_PROCESS.md`、`docs/course/COLD_START_VALIDATION.md`、`AGENT_LOG.md` 至 `AGENT_LOG_v11.md`、`docs/course/CLEAN_MACHINE_VERIFICATION.md` 和 `README_COURSE.md`。
+建议优先查阅：`SPEC_PROCESS.md`、`docs/course/COLD_START_VALIDATION.md`、`docs/course/GITHUB_RELEASE_EVIDENCE.md`、`AGENT_LOG.md` 至 `AGENT_LOG_v12.md`、`docs/course/CLEAN_MACHINE_VERIFICATION.md` 和 `README_COURSE.md`。
 
 ## 写作自查
 
@@ -129,7 +132,7 @@
 - [ ] 覆盖 Superpowers、TDD、subagent、SPEC / PLAN、prompt / context、凭据与分发、如果重做；
 - [ ] 至少包含两个具体事件及其前后变化；
 - [ ] 明确说明未使用 Superpowers 的偏离，不伪造技能调用；
-- [ ] 不声称不存在的公网 URL、远程 CI pass、PR/MR 或发布产物；
+- [ ] 准确区分：GitHub Actions/Release/PR 已存在，公开 WebUI、人工 review 和 GitLab pipeline 不存在；
 - [ ] 不包含 API key、个人 Vault 内容、绝对私人路径或平台秘密；
 - [ ] 若使用 AI 润色，按课程规则标明只润色了哪些内容；
 - [ ] 运行字数检查并人工朗读，删除空泛套话；
@@ -141,4 +144,3 @@
 $text = Get-Content -Raw -Encoding UTF8 REFLECTION.md
 ($text -replace '\s','').Length
 ```
-
