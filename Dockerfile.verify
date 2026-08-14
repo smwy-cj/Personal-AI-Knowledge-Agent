@@ -1,0 +1,27 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /verification
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml README.md LICENSE ./
+COPY src ./src
+RUN python -m pip install --no-cache-dir .
+
+COPY scripts ./scripts
+COPY tests ./tests
+COPY evaluations ./evaluations
+COPY course_demo ./course_demo
+COPY docs/course/RENDER_DEPLOYMENT_GUIDE.md ./docs/course/RENDER_DEPLOYMENT_GUIDE.md
+COPY docs/course/ARCHITECTURE.md ./docs/course/ARCHITECTURE.md
+COPY README_COURSE.md REFLECTION_GUIDE.md ./
+COPY .gitignore .gitlab-ci.yml Dockerfile Dockerfile.verify .dockerignore .env.example ./
+COPY render.yaml docker-compose.example.yml ./
+
+RUN python -m scripts.scan_secrets --working-tree \
+    && python -m scripts.verify
