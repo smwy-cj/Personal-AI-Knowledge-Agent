@@ -7,7 +7,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Any, Dict, Iterator, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence, Union
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -43,10 +43,12 @@ class OpenAICompatibleModelProvider:
         self,
         config: ModelProviderConfig,
         rate_limiter: Optional[SQLiteProviderRateLimiter] = None,
+        credential_resolver: Optional[Callable[[str, Optional[str]], Optional[str]]] = None,
     ) -> None:
         self.config = config
         self.provider_id = config.provider_id
         self.rate_limiter = rate_limiter
+        self.credential_resolver = credential_resolver
 
     def generate(self, request: ModelRequest) -> ProviderResponse:
         reservation = None
@@ -100,7 +102,7 @@ class OpenAICompatibleModelProvider:
                         "response_format": {"type": "json_object"},
                         "max_tokens": request.max_output_tokens,
                     },
-                    self.config.credential_env,
+                    self._credential_reference(),
                     request.timeout_seconds,
                 )
         except RetryableModelError as exc:
@@ -142,6 +144,16 @@ class OpenAICompatibleModelProvider:
         if self.rate_limiter is not None and cooldown is not None:
             self.rate_limiter.defer_provider(self.provider_id, cooldown)
 
+    def _credential_reference(self):
+        if self.credential_resolver is None:
+            return self.config.credential_env
+        def lookup():
+            return self.credential_resolver(
+                self.provider_id, self.config.credential_env
+            )
+        lookup.required = self.config.credential_env is not None
+        return lookup
+
 
 class OpenAICompatibleEmbeddingProvider:
     def __init__(
@@ -149,12 +161,14 @@ class OpenAICompatibleEmbeddingProvider:
         config: EmbeddingProviderConfig,
         rate_limiter: Optional[SQLiteProviderRateLimiter] = None,
         cancellation_token: Optional[Any] = None,
+        credential_resolver: Optional[Callable[[str, Optional[str]], Optional[str]]] = None,
     ) -> None:
         self.config = config
         self.provider_id = config.provider_id
         self.dimension = config.dimension
         self.rate_limiter = rate_limiter
         self.cancellation_token = cancellation_token
+        self.credential_resolver = credential_resolver
 
     def embed(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
         if not texts:
@@ -193,7 +207,7 @@ class OpenAICompatibleEmbeddingProvider:
                 document = _post_json(
                     self.config.base_url + "/embeddings",
                     {"model": self.config.model, "input": texts},
-                    self.config.credential_env,
+                    self._credential_reference(),
                     30.0,
                 )
         except RetryableModelError as exc:
@@ -233,21 +247,38 @@ class OpenAICompatibleEmbeddingProvider:
                 "embedding endpoint returned an invalid response"
             ) from exc
 
+    def _credential_reference(self):
+        if self.credential_resolver is None:
+            return self.config.credential_env
+        def lookup():
+            return self.credential_resolver(
+                self.provider_id, self.config.credential_env
+            )
+        lookup.required = self.config.credential_env is not None
+        return lookup
+
 
 def _post_json(
     url: str,
     payload: Dict[str, Any],
-    credential_env: Optional[str],
+    credential_reference: Union[Optional[str], Callable[[], Optional[str]]],
     timeout_seconds: float,
 ) -> Dict[str, Any]:
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
-    if credential_env:
-        credential = os.environ.get(credential_env)
-        if not credential:
-            raise ProviderConfigurationError(
-                "required provider credential environment variable is not set: %s"
-                % credential_env
-            )
+    if callable(credential_reference):
+        credential = credential_reference()
+        credential_name = "configured credential source"
+        credential_required = getattr(credential_reference, "required", True)
+    else:
+        credential = os.environ.get(credential_reference) if credential_reference else None
+        credential_name = credential_reference
+        credential_required = credential_reference is not None
+    if credential_required and not credential:
+        raise ProviderConfigurationError(
+            "required provider credential is not available: %s"
+            % credential_name
+        )
+    if credential:
         headers["Authorization"] = "Bearer " + credential
     request = Request(
         url,

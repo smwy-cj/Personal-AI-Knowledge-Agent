@@ -1,15 +1,23 @@
 """JSON-oriented command-line interface for the local application service."""
 
 import argparse
+import getpass
 import json
+import os
 import sys
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from .application import ApplicationService
-from .config import ConfigurationError
+from .config import ApplicationConfig, ConfigurationError
+from .credentials import (
+    CredentialResolver,
+    CredentialStore,
+    CredentialStoreError,
+    KeyringCredentialStore,
+)
 from .quality_history import (
     compare_quality_reports,
     generate_quality_baseline_candidate,
@@ -22,6 +30,18 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="command", required=True)
     subcommands.add_parser("config-validate", help="Validate paths and initialize local databases")
     subcommands.add_parser("sync", help="Incrementally ingest the configured Obsidian Vault")
+    credential_set = subcommands.add_parser(
+        "credential-set", help="Securely store or update one provider credential"
+    )
+    credential_set.add_argument("provider_id")
+    credential_status = subcommands.add_parser(
+        "credential-status", help="Show credential status without revealing its value"
+    )
+    credential_status.add_argument("provider_id")
+    credential_delete = subcommands.add_parser(
+        "credential-delete", help="Delete one stored provider credential"
+    )
+    credential_delete.add_argument("provider_id")
 
     search = subcommands.add_parser("search", help="Run citation-ready keyword search")
     search.add_argument("query")
@@ -119,11 +139,25 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(
+    argv: Optional[Sequence[str]] = None,
+    credential_store: Optional[CredentialStore] = None,
+    secret_reader=None,
+    environ: Optional[Mapping[str, str]] = None,
+) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
     try:
-        if arguments.command == "baseline-candidate":
+        if arguments.command in {
+            "credential-set", "credential-status", "credential-delete"
+        }:
+            result = _run_credential_command(
+                arguments,
+                credential_store,
+                secret_reader or getpass.getpass,
+                os.environ if environ is None else environ,
+            )
+        elif arguments.command == "baseline-candidate":
             result = generate_quality_baseline_candidate(
                 arguments.report,
                 arguments.name,
@@ -139,7 +173,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = _run_service_command(service, arguments, parser)
         print(json.dumps(_jsonable(result), ensure_ascii=False, indent=2, sort_keys=True))
         return _result_exit_code(result)
-    except (ConfigurationError, ValueError, KeyError, OSError) as exc:
+    except (
+        ConfigurationError,
+        CredentialStoreError,
+        ValueError,
+        KeyError,
+        OSError,
+    ) as exc:
         print(
             json.dumps(
                 {"error": type(exc).__name__, "message": str(exc)},
@@ -149,6 +189,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             file=sys.stderr,
         )
         return 2
+
+
+def _run_credential_command(arguments, credential_store, secret_reader, environ):
+    config = ApplicationConfig.load(arguments.config)
+    providers = {
+        item.provider_id: item
+        for item in list(config.model_providers) + list(config.embedding_providers)
+    }
+    provider = providers.get(arguments.provider_id)
+    if provider is None:
+        raise ValueError("unknown configured provider: %s" % arguments.provider_id)
+    store = credential_store or KeyringCredentialStore.from_system()
+    if arguments.command == "credential-set":
+        value = secret_reader("Credential for %s: " % provider.provider_id)
+        return store.set(provider.provider_id, value)
+    if arguments.command == "credential-status":
+        return CredentialResolver(store, environ).status(
+            provider.provider_id, provider.credential_env
+        )
+    if arguments.command == "credential-delete":
+        return {"provider_id": provider.provider_id, "deleted": store.delete(provider.provider_id)}
+    raise ValueError("unknown credential command")
 
 
 def _run_service_command(service, arguments, parser):

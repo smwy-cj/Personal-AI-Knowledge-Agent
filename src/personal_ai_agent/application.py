@@ -1,12 +1,13 @@
 """Application service that assembles the local P0 knowledge loop."""
 
 from dataclasses import asdict
-from typing import Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 from uuid import uuid4
 
 from .cancellation import CancellationToken
 from .billing import reconcile_provider_billing
 from .config import ApplicationConfig, EmbeddingProviderConfig
+from .credentials import CredentialResolver
 from .hybrid_search import HybridSearchEngine
 from .knowledge import (
     HybridSearchQuery,
@@ -63,8 +64,14 @@ from .vector import SQLiteVectorIndex
 
 
 class ApplicationService:
-    def __init__(self, config: ApplicationConfig) -> None:
+    def __init__(
+        self,
+        config: ApplicationConfig,
+        model_gateway_factory: Optional[Callable[["ApplicationService"], ModelGateway]] = None,
+    ) -> None:
         self.config = config
+        self._model_gateway_factory = model_gateway_factory
+        self.credential_resolver = CredentialResolver()
         config.data_directory.mkdir(parents=True, exist_ok=True)
         self.knowledge_repository = SQLiteKnowledgeRepository(
             config.data_directory / "knowledge.sqlite3"
@@ -96,8 +103,12 @@ class ApplicationService:
         self.keyword_search = KeywordSearchEngine(self.knowledge_repository)
 
     @classmethod
-    def from_file(cls, config_path: str) -> "ApplicationService":
-        return cls(ApplicationConfig.load(config_path))
+    def from_file(
+        cls,
+        config_path: str,
+        model_gateway_factory: Optional[Callable[["ApplicationService"], ModelGateway]] = None,
+    ) -> "ApplicationService":
+        return cls(ApplicationConfig.load(config_path), model_gateway_factory)
 
     def validate(self) -> Dict[str, object]:
         return {
@@ -493,12 +504,15 @@ class ApplicationService:
             config,
             rate_limiter=self.rate_limiter,
             cancellation_token=cancellation_token,
+            credential_resolver=self.credential_resolver.resolve,
         )
         return config, SQLiteVectorIndex(
             self.knowledge_repository, provider, batch_size=config.batch_size
         )
 
     def _model_gateway(self) -> ModelGateway:
+        if self._model_gateway_factory is not None:
+            return self._model_gateway_factory(self)
         if not self.config.model_providers:
             raise ValueError("no model providers are configured")
         cost_levels = {
@@ -514,7 +528,9 @@ class ApplicationService:
         profiles = [
             ModelProfile(
                 provider=OpenAICompatibleModelProvider(
-                    item, rate_limiter=self.rate_limiter
+                    item,
+                    rate_limiter=self.rate_limiter,
+                    credential_resolver=self.credential_resolver.resolve,
                 ),
                 capabilities=item.capabilities,
                 max_context_tokens=item.max_context_tokens,
