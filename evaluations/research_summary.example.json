@@ -1,0 +1,25 @@
+{
+  "schema": "research_summary_eval_v1",
+  "name": "research-summary-example",
+  "cases": [
+    {
+      "case_id": "citation-example",
+      "citation_count": 2,
+      "summary": {
+        "title": "Agent Reliability",
+        "sections": [
+          {
+            "heading": "Checkpoint",
+            "paragraphs": [
+              {
+                "text": "Checkpoint supports durable recovery.",
+                "citations": [1]
+              }
+            ]
+          }
+        ]
+      },
+      "expected_paragraph_citations": [[1]]
+    }
+  ]
+}

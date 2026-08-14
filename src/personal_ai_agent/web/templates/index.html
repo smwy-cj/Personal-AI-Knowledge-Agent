@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+    <section class="hero">
+      <p>Personal AI Knowledge Agent</p>
+      <h1>让个人知识检索与研究结果可追溯、可验证、可治理</h1>
+      <p>从 Obsidian 笔记中检索证据，生成带引用的研究摘要，并在人工审批后写入长期记忆。</p>
+      {% if demo_mode %}
+      <p role="status">演示模式：使用脱敏示例知识库和确定性模型，不访问真实个人数据或密钥。</p>
+      {% endif %}
+      <p><a class="primary-action" href="{{ url_for('search_page') }}">开始搜索知识库</a></p>
+    </section>
+      <section aria-labelledby="knowledge-status">
+        <h2 id="knowledge-status">知识库状态</h2>
+        <dl>
+          <dt>Vault</dt>
+          <dd>{{ status.vault_id }}</dd>
+          <dt>全文检索</dt>
+          <dd>{{ "可用" if status.fts5_available else "使用兼容回退" }}</dd>
+        </dl>
+      </section>
+{% endblock %}

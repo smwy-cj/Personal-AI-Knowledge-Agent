@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}研究任务 · Personal AI Knowledge Agent{% endblock %}
+{% block content %}
+  <header class="page-heading">
+    <p class="eyebrow">Evidence-grounded research</p>
+    <h1>创建研究任务</h1>
+    <p>系统先检索个人知识库，再生成带引用摘要，并在长期记忆写入前暂停等待审批。</p>
+  </header>
+  <form class="search-form" method="post" action="{{ url_for('research_page') }}" novalidate>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <label for="goal">研究目标</label>
+    <textarea id="goal" name="goal" maxlength="2000" rows="5" required{% if error %} aria-invalid="true" aria-describedby="form-error"{% endif %}>{{ values.goal }}</textarea>
+    <div class="filter-grid">
+      <div>
+        <label for="thread-id">Thread ID</label>
+        <input id="thread-id" name="thread_id" value="{{ values.thread_id }}" maxlength="100">
+      </div>
+      <div>
+        <label for="limit">检索数量</label>
+        <input id="limit" name="limit" type="number" min="1" max="20" value="{{ values.limit }}">
+      </div>
+      <div>
+        <label for="language">输出语言</label>
+        <input id="language" name="language" value="{{ values.language }}">
+      </div>
+    </div>
+    <details>
+      <summary>可选 Provider 设置</summary>
+      <div class="filter-grid two-columns">
+        <div>
+          <label for="model-provider">模型 Provider ID</label>
+          <input id="model-provider" name="model_provider" value="{{ values.model_provider }}">
+        </div>
+        <div>
+          <label for="embedding-provider">Embedding Provider ID</label>
+          <input id="embedding-provider" name="embedding_provider" value="{{ values.embedding_provider }}">
+        </div>
+      </div>
+    </details>
+    {% if error %}<p id="form-error" class="form-error" role="alert">{{ error }}</p>{% endif %}
+    <button type="submit">开始研究</button>
+  </form>
+{% endblock %}

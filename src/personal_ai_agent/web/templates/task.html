@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}任务 {{ state.task_id }} · Personal AI Knowledge Agent{% endblock %}
+{% block content %}
+  <header class="page-heading">
+    <p class="eyebrow">Task {{ state.task_id }}</p>
+    <h1>{{ state.user_goal }}</h1>
+    <p><span class="status-badge status-{{ state.status|lower }}">{{ state.status }}</span></p>
+  </header>
+
+  <section class="task-stats" aria-label="任务统计">
+    <div><strong>{{ state.tool_calls }}</strong><span>工具步骤</span></div>
+    <div><strong>{{ state.model_call_count }}</strong><span>模型调用</span></div>
+    <div><strong>{{ state.token_usage }}</strong><span>Token</span></div>
+  </section>
+
+  {% if state.status not in ["COMPLETED", "PARTIAL_SUCCESS", "FAILED", "CANCELLED"] %}
+  <form method="post" action="{{ url_for('task_cancel', task_id=state.task_id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button class="danger-action" type="submit">取消任务</button>
+  </form>
+  {% endif %}
+
+  {% if state.awaiting_user_approval %}
+  <section class="approval-callout">
+    <h2>需要你的决定</h2>
+    <p>研究结果已经验证，但长期记忆尚未写入。</p>
+    <a class="primary-action" href="{{ url_for('memory_review', task_id=state.task_id) }}">审查记忆候选</a>
+  </section>
+  {% endif %}
+
+  {% if summary %}
+  <article class="summary-card">
+    <h2>{{ summary.title or "研究摘要" }}</h2>
+    {% for section in summary.sections or [] %}
+      <section>
+        <h3>{{ section.heading }}</h3>
+        {% for paragraph in section.paragraphs or [] %}
+          <p>{{ paragraph.text }}</p>
+          {% if paragraph.citations %}<p class="citation-location">引用：{{ paragraph.citations|join(", ") }}</p>{% endif %}
+        {% endfor %}
+      </section>
+    {% endfor %}
+  </article>
+  {% endif %}
+
+  {% if state.evidence %}
+  <section>
+    <h2>证据来源</h2>
+    <ol class="result-list">
+    {% for evidence in state.evidence %}
+      <li class="result-card">
+        <strong>{{ evidence.relative_path or evidence.location or evidence.source_id }}</strong>
+        {% if evidence.start_line %}<span> · 第 {{ evidence.start_line }}–{{ evidence.end_line }} 行</span>{% endif %}
+      </li>
+    {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
+  {% if state.memory_candidates %}
+  <section>
+    <h2>记忆处理结果</h2>
+    <ul>
+    {% for candidate in state.memory_candidates %}
+      <li><code>{{ candidate.candidate_id }}</code> · {{ candidate.governance_status or "PENDING" }}</li>
+    {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if state.errors %}
+  <section class="error-panel">
+    <h2>任务错误</h2>
+    <ul>{% for error in state.errors %}<li>{{ error.error_type }} · 详细信息已安全隐藏</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+{% endblock %}

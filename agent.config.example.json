@@ -1,0 +1,42 @@
+{
+  "vault_path": "D:/Notes/MyVault",
+  "data_directory": "./data",
+  "managed_memory_directory": "Agent/Memory",
+  "observability_retention_days": 90,
+  "model_providers": [
+    {
+      "provider_id": "primary-model",
+      "base_url": "https://api.example.com/v1",
+      "model": "structured-model",
+      "credential_env": "PERSONAL_AGENT_MODEL_KEY",
+      "capabilities": ["structured_output", "chinese", "reasoning"],
+      "max_context_tokens": 32768,
+      "cost_level": "medium",
+      "max_privacy_level": "personal",
+      "priority": 10,
+      "requests_per_minute": 60,
+      "max_rate_limit_wait_seconds": 30,
+      "tokens_per_minute": 60000,
+      "max_concurrent_requests": 4,
+      "concurrency_lease_seconds": 60,
+      "input_cost_per_million_tokens_usd": 0,
+      "output_cost_per_million_tokens_usd": 0
+    }
+  ],
+  "embedding_providers": [
+    {
+      "provider_id": "primary-embedding",
+      "base_url": "https://api.example.com/v1",
+      "model": "embedding-model",
+      "dimension": 1536,
+      "credential_env": "PERSONAL_AGENT_EMBEDDING_KEY",
+      "batch_size": 32,
+      "requests_per_minute": 120,
+      "max_rate_limit_wait_seconds": 30,
+      "tokens_per_minute": 120000,
+      "max_concurrent_requests": 4,
+      "concurrency_lease_seconds": 60,
+      "estimated_tokens_per_input": 256
+    }
+  ]
+}

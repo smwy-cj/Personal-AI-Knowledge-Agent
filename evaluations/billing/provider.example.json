@@ -1,0 +1,19 @@
+{
+  "schema": "provider_billing_statement_v1",
+  "statement_id": "example-provider-2026-08",
+  "provider_id": "example-model-provider",
+  "currency": "USD",
+  "period": {
+    "from": "2026-08-01T00:00:00Z",
+    "to": "2026-09-01T00:00:00Z"
+  },
+  "total_billed_cost_microusd": 250000,
+  "models": [
+    {
+      "model_id": "example-model-v1",
+      "input_tokens": 120000,
+      "output_tokens": 30000,
+      "billed_cost_microusd": 250000
+    }
+  ]
+}

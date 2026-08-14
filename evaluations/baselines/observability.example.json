@@ -1,0 +1,16 @@
+{
+  "schema": "quality_baseline_v1",
+  "name": "example-observability-window-v1",
+  "scope": {
+    "evaluation_type": "observability",
+    "event_limit": 1000
+  },
+  "minimums": {
+    "task_success_rate": 0.95
+  },
+  "maximums": {
+    "model_p95_latency_ms": 30000,
+    "step_p95_latency_ms": 35000,
+    "estimated_cost_usd": 1.0
+  }
+}
