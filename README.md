@@ -2,7 +2,7 @@
 
 面向 Obsidian 的本地优先知识研究应用：增量摄取 Markdown，执行带来源定位的检索与研究，在任何长期记忆写回前要求人工逐项审批。
 
-[GitHub Release v0.1.0](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0) · [课程验收入口](README_COURSE.md) · [架构说明](docs/course/ARCHITECTURE.md) · [完整文档索引](docs/DOCUMENTATION_INDEX.md)
+[GitHub Release v0.1.1](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1) · [课程验收入口](README_COURSE.md) · [架构说明](docs/course/ARCHITECTURE.md) · [完整文档索引](docs/DOCUMENTATION_INDEX.md)
 
 ## 为什么有人会使用它
 
@@ -18,11 +18,11 @@ retrieve → summarize → propose → persist → writeback
 
 ## 当前发布状态
 
-- 版本：`v0.1.0`；
+- 版本：`v0.1.1`；
 - Release commit：`9b13b1bf4dac37ef72b2e004b5af32440dd754aa`；
 - Python：3.9–3.13；
 - 运行依赖：Flask、keyring、Waitress；
-- 自动验收：Release 基线 228 项；当前工作区加入文档一致性检查后为 232 项，全部通过；
+- 自动验收：232 项测试通过；
 - GitHub Actions：Linux Python 3.9/3.11/3.13 与 Windows Python 3.11 全部通过；
 - 独立 Linux Docker 验证：通过；
 - 当前工作区和完整 Git 历史高置信度秘密扫描：0 个发现；
@@ -78,17 +78,17 @@ Release 是可获取的分发链接，不等于已经部署公开 WebUI。当前
 
 ### 方式一：GitHub Release
 
-打开 [v0.1.0 Release](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0)，可下载：
+打开 [v0.1.1 Release](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1)，可下载：
 
-- `personal_ai_knowledge_agent-0.1.0-py3-none-any.whl`；
-- `personal_ai_knowledge_agent-0.1.0.tar.gz`；
+- `personal_ai_knowledge_agent-0.1.1-py3-none-any.whl`；
+- `personal_ai_knowledge_agent-0.1.1.tar.gz`；
 - `SHA256SUMS.txt`；
 - GitHub 自动生成的完整 Source code zip/tar.gz。
 
 安装 wheel：
 
 ```powershell
-python -m pip install .\personal_ai_knowledge_agent-0.1.0-py3-none-any.whl
+python -m pip install .\personal_ai_knowledge_agent-0.1.1-py3-none-any.whl
 personal-ai-agent --help
 personal-ai-agent-web --help
 ```
@@ -98,7 +98,7 @@ personal-ai-agent-web --help
 ```powershell
 git clone https://github.com/smwy-cj/Personal-AI-Knowledge-Agent.git
 cd Personal-AI-Knowledge-Agent
-git switch --detach v0.1.0
+git switch --detach v0.1.1
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip

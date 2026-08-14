@@ -35,13 +35,13 @@ git archive --format=zip --output Personal-AI-Knowledge-Agent-course-final.zip H
 }
 ```
 
-当前可用 Release 是：
+最终课程 Release 是：
 
 ```text
-https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0
+https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1
 ```
 
-但 `v0.1.0` 创建于本轮文档和 `REFLECTION.md` 之前。完成推送后，建议另建包含最终文档的 `v0.1.1` Release，再把 `deploy_release_url` 填为新链接；不要移动或覆盖原来的 `v0.1.0` tag。
+`v0.1.0` 保留为首次发布的历史基线；不得移动或覆盖旧 tag。`submission.jsonc` 的 `deploy_release_url` 应填写上面的 `v0.1.1` 链接。
 
 ## 二、源码压缩包必须包含
 
@@ -78,7 +78,7 @@ https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0
 - `.github/workflows/`；
 - `.gitlab-ci.yml`，并保留名为 `unit-test` 的 job；
 - `render.yaml`；
-- `RELEASE_NOTES_v0.1.0.md`。
+- `RELEASE_NOTES_v0.1.0.md` 与 `RELEASE_NOTES_v0.1.1.md`。
 
 ### 课程证据
 
@@ -116,7 +116,7 @@ https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0
 - Draft PR #1 及后续真实 review/合并记录；
 - GitHub Actions 最终通过记录；
 - `v0.1.0` 历史 Release；
-- 推荐新增包含最终反思和文档的 `v0.1.1` Release。
+- 包含最终反思和文档的 `v0.1.1` Release。
 
 ## 五、打包前最终检查
 

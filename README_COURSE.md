@@ -1,6 +1,6 @@
 # Personal AI Knowledge Agent — AI4SE 课程交付入口
 
-本文件面向助教和首次使用者。截至 2026-08-14，源码、本地 WebUI、Docker/Python 包分发、GitHub Actions、凭据治理、自动测试和学生反思已经完成，并已发布 [`v0.1.0`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0)。当前没有公开 WebUI；按照教师补充说明，提交采用 GitHub Release 路线并填写 `is_deployed=false`。最终人工评审仍待完成。
+本文件面向助教和首次使用者。截至 2026-08-14，源码、本地 WebUI、Docker/Python 包分发、GitHub Actions、凭据治理、自动测试和学生反思已经完成，最终课程交付发布为 [`v0.1.1`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1)。当前没有公开 WebUI；按照教师补充说明，提交采用 GitHub Release 路线并填写 `is_deployed=false`。最终人工评审仍待完成。
 
 ## 项目简介
 
@@ -179,7 +179,7 @@ Ran 228 tests
 OK
 ```
 
-文档收口继续增加一致性测试，最终数量应以当前命令输出为准；228 是已发布 `v0.1.0` 的固定基线。
+`v0.1.1` 的验收基线为 232 项；`v0.1.0` 的历史基线为 228 项。
 
 密钥扫描：
 

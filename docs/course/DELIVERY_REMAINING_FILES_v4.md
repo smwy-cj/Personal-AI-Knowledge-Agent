@@ -1,11 +1,11 @@
 # 交付剩余项 v4
 
 盘点日期：2026-08-14
-基线：GitHub Release `v0.1.0` 已发布，远程 GitHub Actions 已通过。
+基线：最终课程发布 `v0.1.1`，远程 GitHub Actions 使用同一多平台矩阵。
 
 ## 已具备
 
-- 可提交 Release：<https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0>；
+- 可提交 Release：<https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1>；
 - Release 附件与 SHA-256：见 `GITHUB_RELEASE_EVIDENCE.md`；
 - 完整本地与干净 Linux 验收证据；
 - GitHub Actions 多平台/多版本通过证据；

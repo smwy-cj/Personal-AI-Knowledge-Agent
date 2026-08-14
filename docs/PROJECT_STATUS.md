@@ -1,12 +1,11 @@
 # Personal AI Knowledge Agent 项目状态总览
 
-更新基线：Release `v0.1.0` + 交付文档收口（2026-08-14）
+更新基线：Release `v0.1.1`（2026-08-14）
 
 ## 当前发布摘要
 
-- Release：[`v0.1.0`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0)；
-- Release commit：`9b13b1bf4dac37ef72b2e004b5af32440dd754aa`；
-- 验证基线：Release 为 228 项；当前文档收口工作区为 232 项，全部通过；
+- Release：[`v0.1.1`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1)；
+- 验证基线：232 项自动化测试通过；
 - 远程 CI：GitHub Actions 上 Linux Python 3.9/3.11/3.13 与 Windows Python 3.11 全部通过；
 - 分发：GitHub 源码包、wheel、source distribution 与 SHA-256 校验文件；
 - Web：Flask/Jinja 页面由 Waitress 提供服务，支持知识状态、搜索、Research、任务查看和 Memory 审批；

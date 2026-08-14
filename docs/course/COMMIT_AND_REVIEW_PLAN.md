@@ -1,6 +1,6 @@
 # Commit、PR/MR 与评审执行方案
 
-> 执行更新（2026-08-14）：分阶段 commit 已完成并推送到 `agent/iteration-18-delivery-baseline`，Draft PR #1 已创建，`v0.1.0` Release 已发布。当前尚无真实人工 review/批准/合并证据；相关事件发生前不得提前填写。Release 事实见 `GITHUB_RELEASE_EVIDENCE.md`。
+> 执行更新（2026-08-14）：分阶段 commit 已完成并推送到 `agent/iteration-18-delivery-baseline`，Draft PR #1 已创建；`v0.1.0` 保留为历史基线，最终课程版本为 `v0.1.1`。当前尚无真实人工 review/批准/合并证据；相关事件发生前不得提前填写。Release 事实见版本化证据文件。
 
 日期：2026-08-14  
 当前分支：`agent/iteration-18-delivery-baseline`  

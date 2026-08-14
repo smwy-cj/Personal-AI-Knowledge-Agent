@@ -1,6 +1,6 @@
 # Personal AI Knowledge Agent 实施计划
 
-> 当前说明（2026-08-14）：本文是从早期架构到 Iteration 26 的长期产品路线，不是最新课程完成清单。项目现已发布 `v0.1.0`，Release commit 为 `9b13b1b`，Release 基线 228 项测试通过。课程任务真实状态以根目录 `PLAN.md`、`docs/PROJECT_STATUS.md` 和 `docs/course/GITHUB_RELEASE_EVIDENCE.md` 为准。
+> 当前说明（2026-08-14）：本文是从早期架构到 Iteration 26 的长期产品路线，不是最新课程完成清单。最终课程交付版本为 `v0.1.1`，验收基线 232 项测试通过。课程任务真实状态以根目录 `PLAN.md`、`docs/PROJECT_STATUS.md` 和最新 Release 证据为准。
 
 ## 目标共识
 

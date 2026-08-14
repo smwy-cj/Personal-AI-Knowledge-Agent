@@ -20,7 +20,7 @@ COPY course_demo ./course_demo
 COPY docs/course/RENDER_DEPLOYMENT_GUIDE.md ./docs/course/RENDER_DEPLOYMENT_GUIDE.md
 COPY docs/course/ARCHITECTURE.md ./docs/course/ARCHITECTURE.md
 COPY docs/PROJECT_STATUS.md docs/DOCUMENTATION_INDEX.md ./docs/
-COPY docs/course/GITHUB_RELEASE_EVIDENCE.md ./docs/course/GITHUB_RELEASE_EVIDENCE.md
+COPY docs/course/GITHUB_RELEASE_EVIDENCE*.md ./docs/course/
 COPY PLAN.md README_COURSE.md REFLECTION.md REFLECTION_GUIDE.md ./
 COPY .gitignore .gitlab-ci.yml Dockerfile Dockerfile.verify .dockerignore .env.example ./
 COPY render.yaml docker-compose.example.yml ./

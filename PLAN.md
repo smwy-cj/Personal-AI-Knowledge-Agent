@@ -4,8 +4,8 @@
 对应规格：`SPEC.md` + `SPEC_v2.md`
 计划日期：2026-08-13  
 基线 commit：`8b102d0ef76637037e4d1aef9640b47ac0a7a4b7`
-当前发布：[`v0.1.0`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0)，Release commit `9b13b1bf4dac37ef72b2e004b5af32440dd754aa`
-最新自动验收：Release 基线 228 项，当前文档收口工作区 232 项，全部通过；GitHub Actions 的 Linux 3.9/3.11/3.13 和 Windows 3.11 全部通过。
+当前发布：[`v0.1.1`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1)，tag 对应 commit 以 GitHub Release 为准
+最新自动验收：232 项测试全部通过；GitHub Actions 覆盖 Linux 3.9/3.11/3.13 和 Windows 3.11。
 
 ## 1. 执行原则
 

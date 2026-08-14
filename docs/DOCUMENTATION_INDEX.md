@@ -1,7 +1,7 @@
 # 文档索引与维护规则
 
 更新日期：2026-08-14
-当前发布：[`v0.1.0`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0)
+当前发布：[`v0.1.1`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1)
 
 仓库包含活文档、规格版本、阶段证据、历史日志和测试语料。它们用途不同，不能把历史快照机械改写成当前状态，也不能为了统一措辞修改测试语料。
 
@@ -16,8 +16,10 @@
 | `SPEC.md` + `SPEC_v2.md` | 已接受规格及后续澄清；冲突主题以 v2 为准 |
 | `PLAN.md` | 课程交付任务及真实执行状态 |
 | `docs/IMPLEMENTATION_PLAN.md` | 长期产品/工程路线，不等于课程完成清单 |
-| `RELEASE_NOTES_v0.1.0.md` | 当前 Release 资产、能力和限制 |
-| `docs/course/GITHUB_RELEASE_EVIDENCE.md` | Release、tag、CI 和附件校验事实 |
+| `RELEASE_NOTES_v0.1.1.md` | 当前 Release 资产、能力和限制 |
+| `docs/course/GITHUB_RELEASE_EVIDENCE_v2.md` | 当前 Release、tag、CI 和附件校验事实 |
+
+`RELEASE_NOTES_v0.1.0.md` 与 `docs/course/GITHUB_RELEASE_EVIDENCE.md` 保留为首个发布的历史记录。
 
 ## 操作指南
 
@@ -62,7 +64,7 @@
 - `docs/course/SECRET_SCAN_EVIDENCE.md`；
 - `docs/course/T14_HANDOFF_EVIDENCE.md`；
 - `docs/course/DELIVERY_REMAINING_FILES.md`、`v2`、`v3`（逐阶段盘点）；
-- `AGENT_LOG.md` 至 `AGENT_LOG_v12.md`；`AGENT_LOG_v13.md` 为当前文档收口记录。
+- `AGENT_LOG.md` 至 `AGENT_LOG_v12.md` 为实现阶段记录；`AGENT_LOG_v13.md` 记录文档收口，`AGENT_LOG_v14.md` 记录 `v0.1.1` 发布。
 
 当前结论必须看本索引、主 README、项目状态、Release 证据和最新剩余清单，而不是从某个旧快照单独推断。
 

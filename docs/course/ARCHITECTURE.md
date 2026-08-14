@@ -166,7 +166,7 @@ flowchart TB
 - `.gitlab-ci.yml` 包含 `unit-test`、包构建、容器构建和受保护手动部署契约；
 - 质量数据集、报告 schema 和基线候选可版本化，回归使用独立退出码。
 
-`v0.1.0` Release 基线在主机和干净 Linux 镜像中通过 228 项测试；当前文档收口工作区通过 232 项测试。GitHub Actions 的 Linux Python 3.9/3.11/3.13 与 Windows 3.11 已真实通过，Draft PR #1 和 Release 已存在。公开 WebUI 与人工 review 尚未发生，不能从本地 WebUI 或 Draft PR 推断完成。
+`v0.1.1` Release 基线在主机和干净 Linux 镜像中通过 232 项测试；`v0.1.0` 历史基线为 228 项。GitHub Actions 覆盖 Linux Python 3.9/3.11/3.13 与 Windows 3.11，Draft PR #1 和 Release 已存在。公开 WebUI 与人工 review 尚未发生，不能从本地 WebUI 或 Draft PR 推断完成。
 
 ## 关键设计取舍
 

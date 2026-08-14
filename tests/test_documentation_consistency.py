@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_URL = (
-    "https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.0"
+    "https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1"
 )
 
 
@@ -27,7 +27,7 @@ class DocumentationConsistencyTests(unittest.TestCase):
     def test_status_and_plan_describe_executed_delivery(self):
         status = self._read("docs/PROJECT_STATUS.md")
         plan = self._read("PLAN.md")
-        self.assertIn("v0.1.0", status)
+        self.assertIn("v0.1.1", status)
         self.assertIn("228", status)
         self.assertIn("### T14", plan)
         self.assertIn("状态：`DONE`", plan[plan.index("### T14") :])
@@ -36,11 +36,11 @@ class DocumentationConsistencyTests(unittest.TestCase):
 
     def test_documentation_index_and_release_evidence_exist(self):
         index = self._read("docs/DOCUMENTATION_INDEX.md")
-        evidence = self._read("docs/course/GITHUB_RELEASE_EVIDENCE.md")
+        evidence = self._read("docs/course/GITHUB_RELEASE_EVIDENCE_v2.md")
         self.assertIn("历史快照", index)
         self.assertIn("测试语料", index)
         self.assertIn(RELEASE_URL, evidence)
-        self.assertIn("9b13b1b", evidence)
+        self.assertIn("v0.1.1", evidence)
 
     def test_reflection_is_based_on_student_draft_and_discloses_assistance(self):
         guide = self._read("REFLECTION_GUIDE.md")
