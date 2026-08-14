@@ -1,0 +1,6 @@
+{
+  "vault_path": "vault",
+  "data_directory": "runtime",
+  "managed_memory_directory": "Agent/Memory",
+  "observability_retention_days": 30
+}

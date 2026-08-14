@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Personal AI Knowledge Agent{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <header class="site-header">
+      <a class="brand" href="{{ url_for('index') }}">Personal AI Knowledge Agent</a>
+      <nav aria-label="主导航">
+        <a href="{{ url_for('index') }}">首页</a>
+        <a href="{{ url_for('search_page') }}">搜索</a>
+        <a href="{{ url_for('research_page') }}">研究</a>
+      </nav>
+    </header>
+    {% if demo_mode %}
+    <div class="demo-banner" role="status">演示模式 · 脱敏示例数据 · 不访问真实密钥</div>
+    {% endif %}
+    <main id="main-content" class="page-shell" tabindex="-1">{% block content %}{% endblock %}</main>
+  </body>
+</html>

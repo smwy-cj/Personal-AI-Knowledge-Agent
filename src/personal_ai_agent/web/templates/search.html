@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}搜索 · Personal AI Knowledge Agent{% endblock %}
+{% block content %}
+  <header class="page-heading">
+    <p class="eyebrow">Knowledge Search</p>
+    <h1>搜索个人知识库</h1>
+    <p>结果保留原始笔记路径、标题和行号，便于回到 Obsidian 核查上下文。</p>
+  </header>
+
+  <form class="search-form" method="get" action="{{ url_for('search_page') }}" novalidate>
+    <label for="q">搜索内容</label>
+    <input id="q" name="q" value="{{ query }}" maxlength="500" placeholder="例如：checkpoint 如何支持任务恢复" required>
+    <div class="filter-grid">
+      <div>
+        <label for="path-prefix">路径前缀</label>
+        <input id="path-prefix" name="path_prefix" value="{{ path_prefix }}" placeholder="Research">
+      </div>
+      <div>
+        <label for="tag">标签</label>
+        <input id="tag" name="tag" value="{{ tags[0] if tags else '' }}" placeholder="ai">
+      </div>
+      <div>
+        <label for="limit">结果数量</label>
+        <input id="limit" name="limit" type="number" min="1" max="50" value="{{ limit }}">
+      </div>
+    </div>
+    {% if error %}<p class="form-error" role="alert">{{ error }}</p>{% endif %}
+    <button type="submit">搜索</button>
+  </form>
+
+  {% if results is not none %}
+  <section aria-live="polite" aria-labelledby="results-title">
+    <div class="results-heading">
+      <h2 id="results-title">搜索结果</h2>
+      <p>{{ results|length }} 条匹配</p>
+    </div>
+    {% if results %}
+      <ol class="result-list">
+      {% for result in results %}
+        <li class="result-card">
+          <div class="result-meta">
+            <span>{{ result.match_method }}</span>
+            <span>相关度 {{ "%.2f"|format(result.score) }}</span>
+          </div>
+          <h3>{{ result.title }}</h3>
+          {% if result.heading %}<p class="heading-path">{{ result.heading_path|join(" / ") }}</p>{% endif %}
+          <p class="result-content">{{ result.content }}</p>
+          <p class="citation-location">
+            <strong>{{ result.relative_path }}</strong> · 第 {{ result.start_line }}–{{ result.end_line }} 行
+          </p>
+        </li>
+      {% endfor %}
+      </ol>
+    {% else %}
+      <div class="empty-state">
+        <h3>没有找到匹配结果</h3>
+        <p>尝试缩短查询、移除过滤条件，或先同步最新笔记。</p>
+      </div>
+    {% endif %}
+  </section>
+  {% endif %}
+{% endblock %}

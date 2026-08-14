@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}记忆审批 · Personal AI Knowledge Agent{% endblock %}
+{% block content %}
+  <header class="page-heading">
+    <p class="eyebrow">Human approval</p>
+    <h1>审查记忆候选</h1>
+    <p>每个候选都必须明确批准或拒绝。只有批准项能够进入长期记忆和受控 Vault 目录。</p>
+  </header>
+
+  <form method="post" action="{{ url_for('memory_review', task_id=state.task_id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    {% if error %}<p id="form-error" class="form-error" role="alert">{{ error }}</p>{% endif %}
+    <ol class="result-list">
+    {% for candidate in candidates %}
+      <li class="result-card">
+        <div class="result-meta">
+          <span>{{ candidate.memory_type }}</span>
+          <span>置信度 {{ "%.2f"|format(candidate.confidence) }}</span>
+        </div>
+        <h2><code>{{ candidate.candidate_id }}</code></h2>
+        <p>{{ candidate.content }}</p>
+        {% if candidate.conflict_ids %}<p class="form-error">冲突：{{ candidate.conflict_ids|join(", ") }}</p>{% endif %}
+        <fieldset{% if error %} aria-describedby="form-error"{% endif %}>
+          <legend>处理决定</legend>
+          <label><input type="radio" name="decision_{{ candidate.candidate_id }}" value="approve"> 批准</label>
+          <label><input type="radio" name="decision_{{ candidate.candidate_id }}" value="reject"> 拒绝</label>
+        </fieldset>
+      </li>
+    {% endfor %}
+    </ol>
+    <button type="submit">提交全部决定</button>
+  </form>
+{% endblock %}
