@@ -17,6 +17,8 @@ from .quality_evaluation import (
     OBSERVABILITY_QUOTA_MAXIMUM_METRICS,
     RETRIEVAL_MAXIMUM_METRICS,
     RETRIEVAL_MINIMUM_METRICS,
+    RETRIEVAL_V2_MAXIMUM_METRICS,
+    RETRIEVAL_V2_MINIMUM_METRICS,
 )
 
 
@@ -171,6 +173,13 @@ def _report_profile(
         ):
             raise ValueError("retrieval report scope does not match its metadata")
         return scope, RETRIEVAL_MINIMUM_METRICS, RETRIEVAL_MAXIMUM_METRICS
+    if schema == "retrieval_eval_report_v2":
+        if scope["evaluation_type"] != "retrieval" or any(
+            report.get(name) != scope[name]
+            for name in ("dataset_name", "engine", "limit")
+        ):
+            raise ValueError("retrieval report scope does not match its metadata")
+        return scope, RETRIEVAL_V2_MINIMUM_METRICS, RETRIEVAL_V2_MAXIMUM_METRICS
     if schema == "observability_summary_v1":
         if scope["evaluation_type"] != "observability":
             raise ValueError("observability report scope is invalid")

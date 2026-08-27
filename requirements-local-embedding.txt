@@ -1,0 +1,2 @@
+# Optional local-only Embedding runtime. The main application does not require it.
+fastembed==0.8.0

@@ -7,6 +7,7 @@ can use deterministic fake backends without touching a user's credential store.
 
 from dataclasses import dataclass
 import os
+import warnings
 from typing import Callable, Dict, Mapping, Optional, Protocol
 
 
@@ -93,12 +94,21 @@ class KeyringCredentialStore:
     @classmethod
     def from_system(cls) -> "KeyringCredentialStore":
         try:
-            import keyring
+            # Some legacy keyring backend loaders still use the pre-PEP 451
+            # import hooks. Python emits ImportWarning for those hooks when a
+            # test runner enables normally-hidden import warnings; the warning
+            # is owned by the third-party loader and must not pollute JSON CLI
+            # stderr. Keep the suppression limited to backend discovery.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", ImportWarning)
+                import keyring
+
+                backend = keyring.get_keyring()
         except ImportError as exc:
             raise CredentialBackendUnavailable(
                 "the operating-system credential backend is not installed"
             ) from exc
-        return cls(keyring.get_keyring())
+        return cls(backend)
 
     def get(self, provider_id: str) -> Optional[str]:
         normalized = _provider_id(provider_id)

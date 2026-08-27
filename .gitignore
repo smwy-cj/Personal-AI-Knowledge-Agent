@@ -14,3 +14,4 @@ data/
 .env.*
 !.env.example
 secret-scan-report.json
+evaluations/private/

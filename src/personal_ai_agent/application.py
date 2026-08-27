@@ -142,6 +142,25 @@ class ApplicationService:
         _, index = self._vector_index(provider_id)
         return index.sync()
 
+    def vector_search(
+        self,
+        text: str,
+        provider_id: Optional[str] = None,
+        limit: int = 10,
+        path_prefix: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+    ) -> List[KnowledgeSearchResult]:
+        _, index = self._vector_index(provider_id)
+        return index.search(
+            KeywordSearchQuery(
+                text=text,
+                vault_id=self.ingester.vault_id,
+                path_prefix=path_prefix,
+                tags=tags or [],
+                limit=limit,
+            )
+        )
+
     def hybrid_search(
         self,
         text: str,
@@ -408,12 +427,16 @@ class ApplicationService:
         )
         if engine == "keyword":
             search = lambda query, size: self.search(query, size)
+        elif engine == "vector":
+            search = lambda query, size: self.vector_search(
+                query, provider_id=provider_id, limit=size
+            )
         elif engine == "hybrid":
             search = lambda query, size: self.hybrid_search(
                 query, provider_id=provider_id, limit=size
             )
         else:
-            raise ValueError("evaluation engine must be keyword or hybrid")
+            raise ValueError("evaluation engine must be keyword, vector, or hybrid")
         report = evaluate_retrieval(dataset, search, engine, limit)
         output = apply_retrieval_gates(
             report.as_dict(), resolved_minimums, resolved_maximums
@@ -507,7 +530,10 @@ class ApplicationService:
             credential_resolver=self.credential_resolver.resolve,
         )
         return config, SQLiteVectorIndex(
-            self.knowledge_repository, provider, batch_size=config.batch_size
+            self.knowledge_repository,
+            provider,
+            batch_size=config.batch_size,
+            minimum_query_score=config.minimum_query_score,
         )
 
     def _model_gateway(self) -> ModelGateway:

@@ -19,7 +19,7 @@ retrieve → summarize → propose → persist → writeback
 ## 当前发布状态
 
 - 版本：`v0.1.1`；
-- Release commit：`9b13b1bf4dac37ef72b2e004b5af32440dd754aa`；
+- Release commit：`fc43cbcce436779f883d8188fc60270735dbd329`；
 - Python：3.9–3.13；
 - 运行依赖：Flask、keyring、Waitress；
 - 自动验收：232 项测试通过；
@@ -36,7 +36,7 @@ Release 是可获取的分发链接，不等于已经部署公开 WebUI。当前
 
 - Obsidian Markdown 增量同步、删除检测和稳定 Note/Chunk ID；
 - Frontmatter、标题层级、标签、Wiki Link 和 1-based 行号；
-- FTS5 关键词检索及确定性回退；
+- 英文 FTS5 与中文 CJK 双字片段确定性检索，支持精确英文锚点、标签/Wiki Link 元数据和文档多样性；
 - Provider 版本化向量缓存、精确余弦检索和加权 RRF 混合排序；
 - 每个结果保留 Vault、相对路径、Chunk、行号、内容哈希和命中方式。
 
@@ -60,11 +60,15 @@ Release 是可获取的分发链接，不等于已经部署公开 WebUI。当前
 ### Provider 治理与观测
 
 - OpenAI-compatible Chat Completions 与 Embeddings adapter；
+- 可选 FastEmbed 本地中文 Embedding 服务，默认仅绑定回环地址；
 - 能力、上下文、成本和隐私级别路由；
 - HTTPS、超时、有界回退、指数退避、`Retry-After` 和 Embedding 413 拆批；
 - SQLite 跨进程请求/Token/并发限流、共享冷却和 Usage 校正；
 - 隐私最小化事件、成本报告、供应商账单差异核对和保留策略；
-- 检索、摘要引用、记忆治理和运行指标的版本化质量门禁。
+- 检索、摘要引用、记忆治理和运行指标的版本化质量门禁；
+- 检索评测 v2 支持 keyword/vector/hybrid、多语言类型、Chunk Recall 和无答案误召回。
+
+本地中文向量服务的隔离安装、启动、配置和实测取舍见 [本地 Embedding 指南](docs/LOCAL_EMBEDDING_GUIDE.md)。
 
 ### CLI 与 WebUI
 
@@ -193,7 +197,7 @@ python scripts/scan_secrets.py --working-tree --git-history
 docker build -f Dockerfile.verify -t personal-ai-knowledge-agent:verification .
 ```
 
-一键验收覆盖 228 项单元/集成/契约测试、源码编译、安装后 CLI、固定 Vault 同步、成本/账单核对、质量基线和历史比较。GitHub Actions 在四个平台矩阵上执行同一验收并先扫描工作树。
+`v0.1.1` 发布验收覆盖 232 项单元/集成/契约测试、源码编译、安装后 CLI、固定 Vault 同步、成本/账单核对、质量基线和历史比较。GitHub Actions 在四个平台矩阵上执行同一验收并先扫描工作树。
 
 ## 项目结构
 

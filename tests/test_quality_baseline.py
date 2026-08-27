@@ -102,6 +102,17 @@ class QualityBaselineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             QualityBaselinePolicy.load(self.write(document))
 
+    def test_vector_policy_requires_and_preserves_an_explicit_provider(self):
+        document = self.retrieval_document()
+        document["scope"].update({"engine": "vector", "provider_id": None})
+        with self.assertRaises(ValueError):
+            QualityBaselinePolicy.load(self.write(document))
+
+        document["scope"]["provider_id"] = "embed-local"
+        policy = QualityBaselinePolicy.load(self.write(document))
+        self.assertEqual(policy.scope["engine"], "vector")
+        self.assertEqual(policy.scope["provider_id"], "embed-local")
+
 
 if __name__ == "__main__":
     unittest.main()

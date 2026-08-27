@@ -16,6 +16,7 @@ from .execution_control import (
     TaskLeaseLost,
 )
 from .evaluation import (
+    ExpectedRetrievalChunk,
     RetrievalEvaluationDataset,
     RetrievalEvaluationReport,
     evaluate_retrieval,
@@ -96,6 +97,7 @@ __all__ = [
     "ConfigurationError",
     "EmbeddingProviderConfig",
     "ExecutionControlInfo",
+    "ExpectedRetrievalChunk",
     "RetrievalEvaluationDataset",
     "RetrievalEvaluationReport",
     "ResearchSummaryEvaluationDataset",

@@ -11,6 +11,8 @@ from .quality_evaluation import (
     OBSERVABILITY_MINIMUM_METRICS,
     RETRIEVAL_MAXIMUM_METRICS,
     RETRIEVAL_MINIMUM_METRICS,
+    RETRIEVAL_V2_MAXIMUM_METRICS,
+    RETRIEVAL_V2_MINIMUM_METRICS,
 )
 
 
@@ -127,14 +129,18 @@ def validate_quality_baseline_scope(value: Any) -> Dict[str, object]:
         provider_id = value["provider_id"]
         if not _safe_identifier(dataset_name):
             raise ValueError("retrieval baseline dataset_name is invalid")
-        if engine not in {"keyword", "hybrid"}:
-            raise ValueError("retrieval baseline engine must be keyword or hybrid")
+        if engine not in {"keyword", "vector", "hybrid"}:
+            raise ValueError(
+                "retrieval baseline engine must be keyword, vector, or hybrid"
+            )
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
             raise ValueError("retrieval baseline limit must be between 1 and 100")
         if engine == "keyword" and provider_id is not None:
             raise ValueError("keyword retrieval baseline must not declare a provider_id")
-        if engine == "hybrid" and not _safe_identifier(provider_id):
-            raise ValueError("hybrid retrieval baseline requires a provider_id")
+        if engine in {"vector", "hybrid"} and not _safe_identifier(provider_id):
+            raise ValueError(
+                "vector and hybrid retrieval baselines require a provider_id"
+            )
         return retrieval_baseline_scope(
             dataset_name.strip(), engine, limit, provider_id
         )
@@ -175,7 +181,7 @@ def _thresholds(value: Any, direction: str) -> Dict[str, float]:
 
 def _allowed_metrics(evaluation_type: object) -> Tuple[frozenset, frozenset]:
     if evaluation_type == "retrieval":
-        return RETRIEVAL_MINIMUM_METRICS, RETRIEVAL_MAXIMUM_METRICS
+        return RETRIEVAL_V2_MINIMUM_METRICS, RETRIEVAL_V2_MAXIMUM_METRICS
     if evaluation_type == "observability":
         return OBSERVABILITY_MINIMUM_METRICS, OBSERVABILITY_MAXIMUM_METRICS
     raise ValueError("quality baseline evaluation_type is unsupported")

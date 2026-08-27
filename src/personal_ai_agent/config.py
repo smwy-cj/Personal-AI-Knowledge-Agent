@@ -57,6 +57,7 @@ class EmbeddingProviderConfig:
     max_concurrent_requests: Optional[int] = None
     concurrency_lease_seconds: float = 60.0
     estimated_tokens_per_input: int = 256
+    minimum_query_score: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -231,7 +232,7 @@ def _embedding_providers(value: Any) -> List[EmbeddingProviderConfig]:
         "provider_id", "base_url", "model", "dimension", "credential_env", "batch_size",
         "requests_per_minute", "max_rate_limit_wait_seconds",
         "tokens_per_minute", "max_concurrent_requests", "concurrency_lease_seconds",
-        "estimated_tokens_per_input",
+        "estimated_tokens_per_input", "minimum_query_score",
     }
     items = _provider_objects(value, "embedding_providers", allowed)
     return [
@@ -262,6 +263,9 @@ def _embedding_providers(value: Any) -> List[EmbeddingProviderConfig]:
             estimated_tokens_per_input=_positive_integer(
                 item.get("estimated_tokens_per_input", 256),
                 "estimated_tokens_per_input",
+            ),
+            minimum_query_score=_optional_unit_interval(
+                item.get("minimum_query_score"), "minimum_query_score"
             ),
         )
         for item in items
@@ -351,6 +355,15 @@ def _positive_number(value: Any, name: str) -> float:
     number = _non_negative_number(value, name)
     if number == 0:
         raise ConfigurationError("%s must be a positive number" % name)
+    return number
+
+
+def _optional_unit_interval(value: Any, name: str) -> Optional[float]:
+    if value is None:
+        return None
+    number = _non_negative_number(value, name)
+    if number > 1:
+        raise ConfigurationError("%s must be between 0 and 1" % name)
     return number
 
 

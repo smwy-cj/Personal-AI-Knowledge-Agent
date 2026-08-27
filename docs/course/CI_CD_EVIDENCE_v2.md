@@ -14,7 +14,7 @@ GitHub Actions 已在真实远程环境通过以下矩阵：
 | Ubuntu | 3.13 | 通过 |
 | Windows | 3.11 | 通过 |
 
-工作流执行安装、完整 `scripts/verify.py` 验收、安装后命令检查和秘密扫描。Release tag 对应 commit 为 `9b13b1bf4dac37ef72b2e004b5af32440dd754aa`。
+工作流执行安装、完整 `scripts/verify.py` 验收、安装后命令检查和秘密扫描。Release tag 对应 commit 为 `fc43cbcce436779f883d8188fc60270735dbd329`。
 
 ## 修复记录
 

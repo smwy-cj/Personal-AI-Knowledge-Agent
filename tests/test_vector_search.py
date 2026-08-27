@@ -129,6 +129,21 @@ class VectorAndHybridSearchTests(unittest.TestCase):
         self.assertEqual(3, result.embedded)
         self.assertEqual(0, result.unchanged)
 
+    def test_optional_query_score_gate_rejects_low_confidence_neighbors(self):
+        gated = SQLiteVectorIndex(
+            self.repository,
+            self.provider,
+            batch_size=2,
+            minimum_query_score=0.999,
+        )
+        gated.sync()
+
+        self.assertEqual([], gated.search(KeywordSearchQuery("agent memory")))
+        with self.assertRaises(ValueError):
+            SQLiteVectorIndex(
+                self.repository, self.provider, minimum_query_score=1.01
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

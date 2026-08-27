@@ -88,7 +88,9 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands.add_parser("memory-list", help="List persisted semantic memories")
     evaluation = subcommands.add_parser("eval-retrieval", help="Run a versioned retrieval evaluation dataset")
     evaluation.add_argument("dataset")
-    evaluation.add_argument("--engine", choices=("keyword", "hybrid"), default="keyword")
+    evaluation.add_argument(
+        "--engine", choices=("keyword", "vector", "hybrid"), default="keyword"
+    )
     evaluation.add_argument("--provider")
     evaluation.add_argument("--limit", type=int, default=10)
     evaluation.add_argument("--minimum", action="append", default=[])

@@ -171,6 +171,36 @@ def main() -> int:
             sys.stderr.write(evaluation.stderr)
             return evaluation.returncode
         report = json.loads(evaluation.stdout)
+        evaluation_v2 = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "personal_ai_agent",
+                "--config",
+                str(config_path),
+                "eval-retrieval",
+                str(PROJECT_ROOT / "evaluations" / "retrieval.v2.example.json"),
+            ],
+            cwd=PROJECT_ROOT,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if evaluation_v2.returncode != 0:
+            sys.stdout.write(evaluation_v2.stdout)
+            sys.stderr.write(evaluation_v2.stderr)
+            return evaluation_v2.returncode
+        report_v2 = json.loads(evaluation_v2.stdout)
+        serialized_v2 = json.dumps(report_v2, ensure_ascii=False, sort_keys=True)
+        if (
+            report_v2.get("schema") != "retrieval_eval_report_v2"
+            or report_v2.get("answer_case_count") != 7
+            or report_v2.get("no_answer_case_count") != 1
+            or "quantum cooking recipe" in serialized_v2
+            or "checkpoint 恢复" in serialized_v2
+        ):
+            return 1
         report_path = fixture_root / "retrieval-report.json"
         report_path.write_text(
             json.dumps(report, ensure_ascii=False, sort_keys=True), encoding="utf-8"

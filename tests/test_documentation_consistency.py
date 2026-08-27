@@ -1,11 +1,13 @@
+import json
+import re
+import subprocess
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_URL = (
-    "https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1"
-)
+RELEASE = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
+RELEASE_URL = RELEASE["release_url"]
 
 
 class DocumentationConsistencyTests(unittest.TestCase):
@@ -17,7 +19,9 @@ class DocumentationConsistencyTests(unittest.TestCase):
     def test_primary_readme_matches_current_release_and_runtime(self):
         document = self._read("README.md")
         self.assertIn(RELEASE_URL, document)
-        self.assertIn("228", document)
+        self.assertIn(RELEASE["tag"], document)
+        self.assertIn(RELEASE["commit"], document)
+        self.assertIn(f'{RELEASE["acceptance_test_count"]} 项测试', document)
         self.assertIn("Flask", document)
         self.assertIn("keyring", document)
         self.assertIn("Waitress", document)
@@ -27,8 +31,8 @@ class DocumentationConsistencyTests(unittest.TestCase):
     def test_status_and_plan_describe_executed_delivery(self):
         status = self._read("docs/PROJECT_STATUS.md")
         plan = self._read("PLAN.md")
-        self.assertIn("v0.1.1", status)
-        self.assertIn("228", status)
+        self.assertIn(RELEASE["tag"], status)
+        self.assertIn(f'{RELEASE["acceptance_test_count"]} 项自动化测试', status)
         self.assertIn("### T14", plan)
         self.assertIn("状态：`DONE`", plan[plan.index("### T14") :])
         self.assertIn("### T15", plan)
@@ -41,6 +45,38 @@ class DocumentationConsistencyTests(unittest.TestCase):
         self.assertIn("测试语料", index)
         self.assertIn(RELEASE_URL, evidence)
         self.assertIn("v0.1.1", evidence)
+
+    def test_release_metadata_matches_package_and_current_evidence(self):
+        pyproject = self._read("pyproject.toml")
+        version_match = re.search(
+            r'^version\s*=\s*"([^"]+)"\s*$', pyproject, flags=re.MULTILINE
+        )
+        self.assertIsNotNone(version_match)
+        self.assertEqual(RELEASE["version"], version_match.group(1))
+        self.assertEqual(RELEASE["tag"], f'v{RELEASE["version"]}')
+
+        course_readme = self._read("README_COURSE.md")
+        release_notes = self._read(f'RELEASE_NOTES_{RELEASE["tag"]}.md')
+        ci_evidence = self._read("docs/course/CI_CD_EVIDENCE_v2.md")
+        expected_test_result = f'Ran {RELEASE["acceptance_test_count"]} tests'
+        self.assertIn(expected_test_result, course_readme)
+        self.assertIn(
+            f'{RELEASE["acceptance_test_count"]} 项自动化测试', release_notes
+        )
+        self.assertIn(RELEASE["commit"], ci_evidence)
+
+    def test_release_metadata_matches_local_git_tag_when_available(self):
+        try:
+            tagged_commit = subprocess.run(
+                ["git", "rev-parse", f'{RELEASE["tag"]}^{{commit}}'],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            self.skipTest("release tag is unavailable in this source checkout")
+        self.assertEqual(RELEASE["commit"], tagged_commit)
 
     def test_reflection_is_based_on_student_draft_and_discloses_assistance(self):
         guide = self._read("REFLECTION_GUIDE.md")

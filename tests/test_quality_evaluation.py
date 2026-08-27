@@ -204,6 +204,28 @@ class QualityEvaluationTests(unittest.TestCase):
             },
         )
 
+    def test_retrieval_v2_gates_chunk_recall_and_no_answer_false_positives(self):
+        report = apply_retrieval_gates(
+            {
+                "schema": "retrieval_eval_report_v2",
+                "recall_at_k": 1.0,
+                "hit_rate_at_k": 1.0,
+                "mrr_at_k": 1.0,
+                "chunk_recall_at_k": 0.5,
+                "no_answer_false_positive_rate": 0.25,
+                "p50_latency_ms": 20,
+                "p95_latency_ms": 40,
+            },
+            {"chunk_recall_at_k": 0.75},
+            {"no_answer_false_positive_rate": 0.1},
+        )
+
+        self.assertFalse(report["gate_passed"])
+        self.assertEqual(
+            report["failed_gates"],
+            ["chunk_recall_at_k", "no_answer_false_positive_rate"],
+        )
+
     def test_observability_gates_bound_success_latency_and_cost(self):
         report = apply_observability_gates(
             {

@@ -5,7 +5,7 @@ import json
 import math
 import sqlite3
 from contextlib import contextmanager
-from typing import Iterator, List, Protocol, Sequence, Tuple
+from typing import Iterator, List, Optional, Protocol, Sequence, Tuple
 
 from .knowledge import (
     KeywordSearchQuery,
@@ -45,6 +45,7 @@ class SQLiteVectorIndex:
         repository: SQLiteKnowledgeRepository,
         provider: EmbeddingProvider,
         batch_size: int = 32,
+        minimum_query_score: Optional[float] = None,
     ) -> None:
         if not provider.provider_id.strip():
             raise ValueError("embedding provider_id must be non-empty")
@@ -52,9 +53,12 @@ class SQLiteVectorIndex:
             raise ValueError("embedding dimension must be positive")
         if batch_size <= 0:
             raise ValueError("embedding batch_size must be positive")
+        if minimum_query_score is not None and not 0 <= minimum_query_score <= 1:
+            raise ValueError("minimum_query_score must be between 0 and 1")
         self.repository = repository
         self.provider = provider
         self.batch_size = batch_size
+        self.minimum_query_score = minimum_query_score
         self.database_path = repository.database_path
         self._initialize()
 
@@ -201,6 +205,14 @@ class SQLiteVectorIndex:
             score = _cosine_similarity(query_vector, vector)
             scored.append((score, by_id[vector_row["chunk_id"]]))
         scored.sort(key=lambda item: (-item[0], item[1]["relative_path"], item[1]["ordinal"]))
+        if not scored:
+            return []
+        top_score = max(0.0, min(1.0, (scored[0][0] + 1.0) / 2.0))
+        if (
+            self.minimum_query_score is not None
+            and top_score < self.minimum_query_score
+        ):
+            return []
         return [
             _vector_result(row, max(0.0, min(1.0, (score + 1.0) / 2.0)))
             for score, row in scored[: query.limit]

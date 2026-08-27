@@ -20,6 +20,12 @@ RETRIEVAL_MINIMUM_METRICS = frozenset(
 RETRIEVAL_MAXIMUM_METRICS = frozenset(
     {"p50_latency_ms", "p95_latency_ms"}
 )
+RETRIEVAL_V2_MINIMUM_METRICS = RETRIEVAL_MINIMUM_METRICS | frozenset(
+    {"chunk_recall_at_k"}
+)
+RETRIEVAL_V2_MAXIMUM_METRICS = RETRIEVAL_MAXIMUM_METRICS | frozenset(
+    {"no_answer_false_positive_rate"}
+)
 OBSERVABILITY_MINIMUM_METRICS = frozenset({"task_success_rate"})
 OBSERVABILITY_LEGACY_MAXIMUM_METRICS = frozenset(
     {
@@ -350,12 +356,13 @@ def apply_retrieval_gates(
     minimums: Dict[str, float],
     maximums: Optional[Dict[str, float]] = None,
 ) -> Dict[str, object]:
+    is_v2 = report.get("schema") == "retrieval_eval_report_v2"
     return apply_metric_gates(
         report,
         minimums,
         maximums or {},
-        RETRIEVAL_MINIMUM_METRICS,
-        RETRIEVAL_MAXIMUM_METRICS,
+        RETRIEVAL_V2_MINIMUM_METRICS if is_v2 else RETRIEVAL_MINIMUM_METRICS,
+        RETRIEVAL_V2_MAXIMUM_METRICS if is_v2 else RETRIEVAL_MAXIMUM_METRICS,
     )
 
 

@@ -72,6 +72,7 @@ class ApplicationConfigTests(unittest.TestCase):
                                 "tokens_per_minute": 120000,
                                 "max_concurrent_requests": 4,
                                 "estimated_tokens_per_input": 128,
+                                "minimum_query_score": 0.82,
                             }
                         ],
                     }
@@ -97,6 +98,7 @@ class ApplicationConfigTests(unittest.TestCase):
             self.assertEqual(
                 config.embedding_providers[0].estimated_tokens_per_input, 128
             )
+            self.assertEqual(config.embedding_providers[0].minimum_query_score, 0.82)
 
     def test_rejects_invalid_prices_and_retention(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -195,6 +197,8 @@ class ApplicationConfigTests(unittest.TestCase):
                 {"max_concurrent_requests": 0},
                 {"concurrency_lease_seconds": 0},
                 {"estimated_tokens_per_input": 0},
+                {"minimum_query_score": -0.1},
+                {"minimum_query_score": 1.1},
             ]
             for limits in invalid_limits:
                 with self.subTest(limits=limits):

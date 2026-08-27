@@ -378,7 +378,17 @@ class SQLiteKnowledgeRepository:
             SELECT
                 c.chunk_id, c.document_id, d.vault_id, d.relative_path, d.title,
                 c.heading, c.heading_path_json, c.content, c.start_line, c.end_line,
-                c.ordinal
+                c.ordinal, d.frontmatter_json AS metadata_text,
+                COALESCE(
+                    (SELECT group_concat(t.tag, ' ')
+                     FROM knowledge_tags t WHERE t.document_id = d.document_id),
+                    ''
+                ) AS tags_text,
+                COALESCE(
+                    (SELECT group_concat(l.target, ' ')
+                     FROM knowledge_links l WHERE l.document_id = d.document_id),
+                    ''
+                ) AS links_text
             FROM knowledge_chunks c
             JOIN knowledge_documents d ON d.document_id = c.document_id
             WHERE %s

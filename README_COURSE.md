@@ -175,7 +175,7 @@ python scripts/verify.py
 该命令运行完整测试、编译检查、CLI 烟雾测试、样例 Vault 同步、成本/账单核对和质量基线流程。2026-08-14 的最新结果为：
 
 ```text
-Ran 228 tests
+Ran 232 tests
 OK
 ```
 

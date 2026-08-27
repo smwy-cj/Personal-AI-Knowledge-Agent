@@ -73,6 +73,15 @@ class QualityHistoryTests(unittest.TestCase):
         report.update(overrides)
         return report
 
+    def retrieval_v2_report(self, **overrides):
+        report = self.retrieval_report(
+            schema="retrieval_eval_report_v2",
+            chunk_recall_at_k=0.8,
+            no_answer_false_positive_rate=0.1,
+        )
+        report.update(overrides)
+        return report
+
     def test_generates_pending_candidate_with_review_margins_and_no_path(self):
         source = self.write("private-report.json", self.retrieval_report())
 
@@ -85,6 +94,23 @@ class QualityHistoryTests(unittest.TestCase):
         self.assertEqual(candidate["proposed_policy"]["maximums"]["p95_latency_ms"], 240.0)
         self.assertNotIn("cases", candidate)
         self.assertNotIn(str(source), json.dumps(candidate))
+
+    def test_v2_candidate_includes_chunk_and_no_answer_metrics(self):
+        source = self.write("retrieval-v2.json", self.retrieval_v2_report())
+
+        candidate = generate_quality_baseline_candidate(
+            source, "retrieval-v2-candidate", 0.9, 1.5
+        )
+
+        self.assertEqual(
+            candidate["proposed_policy"]["minimums"]["chunk_recall_at_k"], 0.72
+        )
+        self.assertEqual(
+            candidate["proposed_policy"]["maximums"][
+                "no_answer_false_positive_rate"
+            ],
+            0.15,
+        )
         QualityBaselinePolicy.from_document(candidate["proposed_policy"])
 
     def test_generates_observability_candidate_and_rejects_invalid_parameters(self):

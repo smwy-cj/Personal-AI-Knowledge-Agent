@@ -1,0 +1,84 @@
+{
+  "schema": "retrieval_dataset_v2",
+  "name": "personal-knowledge-retrieval-v2-example",
+  "cases": [
+    {
+      "case_id": "zh-architecture-recovery",
+      "query": "checkpoint 恢复",
+      "language": "zh-CN",
+      "query_type": "factual",
+      "expects_answer": true,
+      "expected_paths": ["Architecture.md"],
+      "expected_chunks": [
+        {"path": "Architecture.md", "heading": "Agent Runtime Architecture"}
+      ]
+    },
+    {
+      "case_id": "en-research-drift",
+      "query": "citation verification source drift",
+      "language": "en",
+      "query_type": "conceptual",
+      "expects_answer": true,
+      "expected_paths": ["Research.md"],
+      "expected_chunks": [
+        {"path": "Research.md", "heading": "Evidence-backed Research"}
+      ]
+    },
+    {
+      "case_id": "zh-memory-approval",
+      "query": "semantic memory approval 审批",
+      "language": "zh-CN",
+      "query_type": "conceptual",
+      "expects_answer": true,
+      "expected_paths": ["Memory.md"],
+      "expected_chunks": [
+        {"path": "Memory.md", "heading": "Governed Semantic Memory"}
+      ]
+    },
+    {
+      "case_id": "en-research-title",
+      "query": "Evidence-backed Research",
+      "language": "en",
+      "query_type": "navigational",
+      "expects_answer": true,
+      "expected_paths": ["Research.md"],
+      "expected_chunks": []
+    },
+    {
+      "case_id": "en-recovery-synonym",
+      "query": "resume interrupted work",
+      "language": "en",
+      "query_type": "synonym",
+      "expects_answer": true,
+      "expected_paths": ["Architecture.md"],
+      "expected_chunks": []
+    },
+    {
+      "case_id": "en-memory-tag-query",
+      "query": "memory",
+      "language": "en",
+      "query_type": "tag",
+      "expects_answer": true,
+      "expected_paths": ["Memory.md"],
+      "expected_chunks": []
+    },
+    {
+      "case_id": "en-research-link-query",
+      "query": "Research",
+      "language": "en",
+      "query_type": "link",
+      "expects_answer": true,
+      "expected_paths": ["Research.md"],
+      "expected_chunks": []
+    },
+    {
+      "case_id": "en-no-answer",
+      "query": "quantum cooking recipe",
+      "language": "en",
+      "query_type": "no_answer",
+      "expects_answer": false,
+      "expected_paths": [],
+      "expected_chunks": []
+    }
+  ]
+}

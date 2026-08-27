@@ -346,6 +346,40 @@ class ApplicationCliTests(unittest.TestCase):
             self.assertEqual((code, errors), (0, ""))
             self.assertEqual(json.loads(output)[0]["relative_path"], "Architecture.md")
 
+            vector_dataset = self.root / "vector-eval.json"
+            vector_dataset.write_text(
+                json.dumps(
+                    {
+                        "schema": "retrieval_eval_v1",
+                        "name": "vector-cli-baseline",
+                        "cases": [
+                            {
+                                "case_id": "vector-recovery",
+                                "query": "private semantic recovery query",
+                                "expected_paths": ["Architecture.md"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            code, output, errors = self.invoke(
+                "eval-retrieval",
+                str(vector_dataset),
+                "--engine",
+                "vector",
+                "--provider",
+                "embed-local",
+            )
+            self.assertEqual((code, errors), (0, ""))
+            vector_report = json.loads(output)
+            self.assertEqual(vector_report["recall_at_k"], 1.0)
+            self.assertEqual(vector_report["engine"], "vector")
+            self.assertEqual(
+                vector_report["evaluation_scope"]["provider_id"], "embed-local"
+            )
+            self.assertNotIn("private semantic recovery query", output)
+
             code, output, errors = self.invoke(
                 "research-run",
                 "durable recovery",

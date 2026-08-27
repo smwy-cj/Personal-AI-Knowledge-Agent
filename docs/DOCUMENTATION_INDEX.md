@@ -1,6 +1,6 @@
 # 文档索引与维护规则
 
-更新日期：2026-08-14
+更新日期：2026-08-28
 当前发布：[`v0.1.1`](https://github.com/smwy-cj/Personal-AI-Knowledge-Agent/releases/tag/v0.1.1)
 
 仓库包含活文档、规格版本、阶段证据、历史日志和测试语料。它们用途不同，不能把历史快照机械改写成当前状态，也不能为了统一措辞修改测试语料。
@@ -16,6 +16,9 @@
 | `SPEC.md` + `SPEC_v2.md` | 已接受规格及后续澄清；冲突主题以 v2 为准 |
 | `PLAN.md` | 课程交付任务及真实执行状态 |
 | `docs/IMPLEMENTATION_PLAN.md` | 长期产品/工程路线，不等于课程完成清单 |
+| `docs/IMPROVEMENT_PLAN.md` | 当前评估后的分阶段改进步骤与验收标准 |
+| `docs/RETRIEVAL_EVALUATION_V2.md` | v2 检索数据集、无答案指标、门禁与脱敏指南 |
+| `docs/LOCAL_EMBEDDING_GUIDE.md` | 隔离 FastEmbed 运行时、本地服务、Provider 配置与真实基线 |
 | `RELEASE_NOTES_v0.1.1.md` | 当前 Release 资产、能力和限制 |
 | `docs/course/GITHUB_RELEASE_EVIDENCE_v2.md` | 当前 Release、tag、CI 和附件校验事实 |
 
@@ -30,6 +33,7 @@
 - `docs/course/WEB_SECURITY.md`：Web 威胁和控制。
 - `docs/course/WEB_ARCHITECTURE.md`：Web 子系统详细端口与路由结构。
 - `docs/course/WEB_SEARCH_ACCEPTANCE.md`：搜索 UI 验收。
+- `docs/LOCAL_EMBEDDING_GUIDE.md`：本地中文 Embedding 服务、向量同步与 hybrid 查询。
 
 ## 课程过程与计划
 

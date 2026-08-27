@@ -46,7 +46,8 @@ P0 最小可信闭环已完成。P1 可靠性增强已完成主要运行时地�
 
 - Obsidian Markdown 增量摄取、删除检测和稳定文档/Chunk ID；
 - Frontmatter、标题层级、标签、Wiki Link 与 1-based 行号；
-- FTS5 与确定性关键词回退；
+- 英文 FTS5、中文 CJK 双字片段确定性回退、精确英文锚点与文档多样性控制；
+- 标签、Wiki Link、Frontmatter 和相对路径参与中文元数据检索；
 - Provider 版本化向量缓存、精确余弦检索和加权 RRF；
 - 检索结果保留 Vault、文件、Chunk、行号、内容与匹配方法。
 
@@ -74,10 +75,10 @@ P0 最小可信闭环已完成。P1 可靠性增强已完成主要运行时地�
 
 - 无密钥 JSON 配置与严格路径校验；
 - JSON CLI 覆盖同步、检索、研究、任务、取消、记忆审批与写回；
-- Release 基线的 228 项自动化测试覆盖单元、Workflow、持久化、CLI、Web、凭据、容器交付、观测、质量门禁、限流和端到端闭环；
+- `v0.1.1` Release 基线的 232 项自动化测试覆盖单元、Workflow、持久化、CLI、Web、凭据、容器交付、观测、质量门禁、限流和端到端闭环；
 - 跨平台一键验收入口统一执行测试、源码编译和 CLI 冒烟检查；
 - GitHub Actions 覆盖 Python 3.9/3.11/3.13、Linux/Windows、包安装与安装后命令检查；
-- 版本化检索评测集与 Recall@K、Hit Rate@K、MRR@K、P50/P95 延迟报告；
+- 版本化检索评测集与 Recall@K、Hit Rate@K、MRR@K、Chunk Recall、无答案误召回及 P50/P95 延迟报告；
 - 人工引用标签的 Research Summary 评测与规则标签的 Memory Governance 评测；
 - 可配置质量门禁及 CI 可区分的 `0/3/2` 退出码；
 - 待人工审查的基线候选生成、报告指纹和同作用域历史差异判定；
@@ -150,6 +151,18 @@ Token 预约新增唯一记录，并在成功响应返回完整 Usage 时事务�
 共享限流器现以 best-effort 方式记录容量/并发等待、实际生效的冷却延长和首次 Token Usage 校正。事件字段严格限定为 Provider ID、配额种类、毫秒及时长/Token 数值；请求与响应正文、HTTP 头、预约 ID 和绝对冷却时间均不会进入 Event Store。SQLite、I/O 或字段校验失败不会改变 Provider 调用行为。
 
 `observability-summary` 新增配额等待次数与 P50/P95、冷却次数与最大时长、Token 估算/实际/净差/绝对误差和已应用校正。质量门禁可限制配额 P95 等待、冷却次数及 Token 估算绝对误差。旧版观测报告仍可生成原指标候选；历史比较要求双方实际指标集合一致，避免把新增指标缺失误判成损坏或直接进行不完整比较。下一增量应基于受审真实 Provider 样本校准阈值并建设专用配额适配器，或扩展自然语言蕴含与真实用户反馈评测。
+
+## Iteration 27：中文真实查询与独立检索基线
+
+检索评测 v2 已在 Git 忽略目录中使用真实 Vault 建立 82 条本地查询，按查询类型分层确定性划分为 66 条 tuning 和 16 条独立 test。逐 Case 报告继续只保留匿名 ID、类型、计数、排名和延迟，不输出查询、路径或正文。
+
+真实查询暴露出 FTS5 `unicode61` 无法切分连续中文自然句的问题。关键词引擎现对中文使用去重 CJK 双字片段、通用问句过滤、英文精确锚点、元数据字段权重和每文档最多两个前列 Chunk；英文查询保留原 FTS5 严格 AND 行为。参数冻结后的唯一一次 test 结果为 Recall/Hit Rate@10 92.31%、MRR@10 81.41%、Chunk Recall@10 75%、无答案误召回 0%、P95 16 ms。该结果是本机与当前 Vault 的基线，不是通用 SLA，也没有用于二次调参。
+
+## Iteration 28：本地中文 Embedding 与拒答门槛
+
+新增独立 FastEmbed 本地服务脚本和可选依赖清单，默认只监听 `127.0.0.1`，提供受限的 OpenAI-compatible `/v1/embeddings` 接口；输入正文不进入日志，模型缓存、真实配置和向量数据继续位于 Git 忽略目录。本地 `BAAI/bge-small-zh-v1.5` 已为真实 Vault 的 253 个 Chunk 建立 512 维增量索引。
+
+向量检索新增 Provider 级 `minimum_query_score` 查询门槛；它只在最佳邻居仍低于阈值时拒绝整次向量结果，默认保持关闭。当前模型依据 tuning 集配置为 0.82，不能迁移到其他模型或知识库。一次性独立 test 中，hybrid 与 keyword 的 Recall@10 同为 92.31%，Chunk Recall 从 75% 提升至 83.33%，但 MRR 从 81.41% 降至 76.92%，P95 从 16ms 增至 110ms。因此 keyword 继续作为默认快速路径，hybrid 只在需要语义补充或更精确 Chunk 时显式启用。
 
 ## 当前验收命令
 
